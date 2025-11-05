@@ -30,9 +30,14 @@ class Crosshair:
     """照準クラス"""
     def __init__(self):
         self.x = SCREEN_WIDTH // 2
-        self.y = SCREEN_HEIGHT - 50
+        self.y = SCREEN_HEIGHT // 2
         self.size = 20
         self.speed = 5
+
+    def get_rect(self):
+        """衝突判定用の矩形を返す"""
+        return pygame.Rect(self.x - self.size // 2, self.y - self.size // 2,
+                          self.size, self.size)
 
     def update(self, keys):
         """矢印キーで照準を移動"""
@@ -40,6 +45,10 @@ class Crosshair:
             self.x -= self.speed
         if keys[pygame.K_RIGHT] and self.x < SCREEN_WIDTH - self.size:
             self.x += self.speed
+        if keys[pygame.K_UP] and self.y > self.size:
+            self.y -= self.speed
+        if keys[pygame.K_DOWN] and self.y < SCREEN_HEIGHT - self.size:
+            self.y += self.speed
 
     def draw(self, screen):
         """照準を描画"""
@@ -49,31 +58,6 @@ class Crosshair:
         pygame.draw.line(screen, RED, (self.x, self.y - self.size),
                         (self.x, self.y + self.size), 3)
         pygame.draw.circle(screen, RED, (self.x, self.y), self.size, 2)
-
-
-class Bullet:
-    """弾丸クラス"""
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.radius = 5
-        self.speed = 10
-        self.active = True
-
-    def update(self):
-        """弾丸を上に移動"""
-        self.y -= self.speed
-        if self.y < 0:
-            self.active = False
-
-    def draw(self, screen):
-        """弾丸を描画"""
-        pygame.draw.circle(screen, YELLOW, (int(self.x), int(self.y)), self.radius)
-
-    def get_rect(self):
-        """衝突判定用の矩形を返す"""
-        return pygame.Rect(self.x - self.radius, self.y - self.radius,
-                          self.radius * 2, self.radius * 2)
 
 
 class Card:
@@ -106,10 +90,25 @@ class CardPack:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.initial_x = x  # 初期位置を記憶
         self.width = 60
         self.height = 80
         self.destroyed = False
         self.color = BLUE
+
+        # ランダムな左右移動
+        self.speed = random.uniform(1, 3)  # ランダムな速度
+        self.direction = random.choice([-1, 1])  # ランダムな初期方向
+        self.move_range = random.randint(30, 80)  # 移動範囲
+
+    def update(self):
+        """カードパックを左右に動かす"""
+        if not self.destroyed:
+            self.x += self.speed * self.direction
+
+            # 初期位置から一定範囲を超えたら方向転換
+            if abs(self.x - self.initial_x) > self.move_range:
+                self.direction *= -1
 
     def draw(self, screen):
         """カードパックを描画"""
@@ -150,7 +149,6 @@ class Game:
 
         # ゲーム要素の初期化
         self.crosshair = Crosshair()
-        self.bullets = []
         self.card_packs = []
         self.cards = []
         self.ammo = INITIAL_AMMO
@@ -163,17 +161,40 @@ class Game:
         self.big_font = pygame.font.Font(None, 72)
 
     def _setup_card_packs(self):
-        """カードパックを左右に配置"""
-        # 左側に5個
-        for i in range(5):
-            x = 50
-            y = 80 + i * 100
+        """カードパックをトランプの5のパターンで配置"""
+        # 左側エリアの中心座標
+        left_center_x = SCREEN_WIDTH // 4
+        center_y = SCREEN_HEIGHT // 2
+
+        # 右側エリアの中心座標
+        right_center_x = SCREEN_WIDTH * 3 // 4
+
+        # オフセット（4隅からの距離）
+        offset_x = 120
+        offset_y = 180
+
+        # 左側に5個（トランプの5のパターン）
+        left_positions = [
+            (left_center_x - offset_x, center_y - offset_y),  # 左上
+            (left_center_x + offset_x, center_y - offset_y),  # 右上
+            (left_center_x, center_y),                        # 中央
+            (left_center_x - offset_x, center_y + offset_y),  # 左下
+            (left_center_x + offset_x, center_y + offset_y),  # 右下
+        ]
+
+        for x, y in left_positions:
             self.card_packs.append(CardPack(x, y))
 
-        # 右側に5個
-        for i in range(5):
-            x = SCREEN_WIDTH - 110
-            y = 80 + i * 100
+        # 右側に5個（トランプの5のパターン）
+        right_positions = [
+            (right_center_x - offset_x, center_y - offset_y),  # 左上
+            (right_center_x + offset_x, center_y - offset_y),  # 右上
+            (right_center_x, center_y),                        # 中央
+            (right_center_x - offset_x, center_y + offset_y),  # 左下
+            (right_center_x + offset_x, center_y + offset_y),  # 右下
+        ]
+
+        for x, y in right_positions:
             self.card_packs.append(CardPack(x, y))
 
     def handle_events(self):
@@ -188,15 +209,24 @@ class Game:
                     self._restart()
 
     def _fire(self):
-        """弾丸を発射"""
+        """照準位置でヒット判定"""
         if self.ammo > 0:
-            bullet = Bullet(self.crosshair.x, self.crosshair.y)
-            self.bullets.append(bullet)
             self.ammo -= 1
+            crosshair_rect = self.crosshair.get_rect()
+
+            # 照準とカードパックの衝突判定
+            for pack in self.card_packs:
+                if pack.destroyed:
+                    continue
+
+                if crosshair_rect.colliderect(pack.get_rect()):
+                    # ヒット！
+                    new_cards = pack.destroy()
+                    self.cards.extend(new_cards)
+                    break
 
     def _restart(self):
         """ゲームを再開"""
-        self.bullets.clear()
         self.card_packs.clear()
         self.cards.clear()
         self.ammo = INITIAL_AMMO
@@ -211,11 +241,9 @@ class Game:
         keys = pygame.key.get_pressed()
         self.crosshair.update(keys)
 
-        # 弾丸の更新
-        for bullet in self.bullets[:]:
-            bullet.update()
-            if not bullet.active:
-                self.bullets.remove(bullet)
+        # カードパックの更新（左右移動）
+        for pack in self.card_packs:
+            pack.update()
 
         # カードの更新
         for card in self.cards[:]:
@@ -223,35 +251,13 @@ class Game:
             if not card.active:
                 self.cards.remove(card)
 
-        # 衝突判定
-        self._check_collisions()
-
         # ゲームオーバー判定
         self._check_game_over()
-
-    def _check_collisions(self):
-        """弾丸とカードパックの衝突判定"""
-        for bullet in self.bullets[:]:
-            if not bullet.active:
-                continue
-            bullet_rect = bullet.get_rect()
-
-            for pack in self.card_packs:
-                if pack.destroyed:
-                    continue
-
-                if bullet_rect.colliderect(pack.get_rect()):
-                    # ヒット！
-                    bullet.active = False
-                    self.bullets.remove(bullet)
-                    new_cards = pack.destroy()
-                    self.cards.extend(new_cards)
-                    break
 
     def _check_game_over(self):
         """ゲームオーバー条件をチェック"""
         # 弾切れ
-        if self.ammo == 0 and len(self.bullets) == 0:
+        if self.ammo == 0:
             self.game_over = True
 
         # 全カードパック破壊
@@ -270,10 +276,6 @@ class Game:
         # カードを描画
         for card in self.cards:
             card.draw(self.screen)
-
-        # 弾丸を描画
-        for bullet in self.bullets:
-            bullet.draw(self.screen)
 
         # 照準を描画
         self.crosshair.draw(self.screen)
