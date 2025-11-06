@@ -24,6 +24,7 @@ ORANGE = (255, 165, 0)
 INITIAL_AMMO = 10
 CARD_PACKS_COUNT = 10
 CARDS_PER_PACK = 5
+TIME_LIMIT = 45  # 制限時間（秒）
 
 
 class Crosshair:
@@ -152,6 +153,7 @@ class Game:
         self.card_packs = []
         self.cards = []
         self.ammo = INITIAL_AMMO
+        self.start_time = pygame.time.get_ticks()  # ゲーム開始時刻
 
         # カードパックの配置 (左右に5個ずつ)
         self._setup_card_packs()
@@ -231,6 +233,7 @@ class Game:
         self.cards.clear()
         self.ammo = INITIAL_AMMO
         self.game_over = False
+        self.start_time = pygame.time.get_ticks()  # タイマーをリセット
         self._setup_card_packs()
 
     def update(self):
@@ -254,6 +257,12 @@ class Game:
         # ゲームオーバー判定
         self._check_game_over()
 
+    def _get_remaining_time(self):
+        """残り時間を計算（秒）"""
+        elapsed_time = (pygame.time.get_ticks() - self.start_time) / 1000
+        remaining = TIME_LIMIT - elapsed_time
+        return max(0, remaining)
+
     def _check_game_over(self):
         """ゲームオーバー条件をチェック"""
         # 弾切れ
@@ -263,6 +272,10 @@ class Game:
         # 全カードパック破壊
         all_destroyed = all(pack.destroyed for pack in self.card_packs)
         if all_destroyed:
+            self.game_over = True
+
+        # 制限時間切れ
+        if self._get_remaining_time() <= 0:
             self.game_over = True
 
     def draw(self):
@@ -299,6 +312,12 @@ class Game:
         destroyed = sum(1 for pack in self.card_packs if pack.destroyed)
         packs_text = self.font.render(f"Packs: {destroyed}/{CARD_PACKS_COUNT}", True, WHITE)
         self.screen.blit(packs_text, (10, 50))
+
+        # 残り時間
+        remaining_time = self._get_remaining_time()
+        time_color = RED if remaining_time <= 10 else WHITE
+        time_text = self.font.render(f"Time: {remaining_time:.1f}s", True, time_color)
+        self.screen.blit(time_text, (10, 90))
 
         # 獲得カード数
         cards_text = self.font.render(f"Cards: {len(self.cards)}", True, WHITE)
