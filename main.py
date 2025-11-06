@@ -26,6 +26,11 @@ CARD_PACKS_COUNT = 10
 CARDS_PER_PACK = 5
 TIME_LIMIT = 45  # 制限時間（秒）
 
+# ゲーム状態
+STATE_SHOOTING = "shooting"
+STATE_PACK_OPENING = "pack_opening"
+STATE_RESULT = "result"
+
 
 class Crosshair:
     """照準クラス"""
@@ -139,6 +144,148 @@ class CardPack:
         return cards
 
 
+class PackOpening:
+    """パック開封シーンクラス"""
+    def __init__(self, destroyed_packs_count):
+        self.destroyed_packs_count = destroyed_packs_count
+        self.current_pack_index = 0
+        self.opening_progress = 0  # 0-100の開封進行度
+        self.is_opened = False
+        self.pack_width = 200
+        self.pack_height = 280
+        self.pack_x = SCREEN_WIDTH // 2 - self.pack_width // 2
+        self.pack_y = SCREEN_HEIGHT // 2 - self.pack_height // 2
+
+        # ダミーカードデータ
+        self.current_cards = self._generate_dummy_cards()
+
+        # フォント
+        self.font = pygame.font.Font(None, 36)
+        self.small_font = pygame.font.Font(None, 24)
+
+    def _generate_dummy_cards(self):
+        """ダミーカードを生成"""
+        colors = [RED, BLUE, GREEN, PURPLE, ORANGE]
+        cards = []
+        for i in range(CARDS_PER_PACK):
+            cards.append({
+                'name': f'Card {i+1}',
+                'color': colors[i % len(colors)],
+                'rarity': ['Common', 'Rare', 'Super Rare'][i % 3]
+            })
+        return cards
+
+    def handle_input(self, keys):
+        """キー入力処理"""
+        if not self.is_opened:
+            # 矢印キーのいずれかが押されたら開封進行
+            if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+                self.opening_progress += 2
+                if self.opening_progress >= 100:
+                    self.opening_progress = 100
+                    self.is_opened = True
+
+    def draw(self, screen):
+        """描画"""
+        screen.fill(BLACK)
+
+        if not self.is_opened:
+            self._draw_pack_opening(screen)
+        else:
+            self._draw_opened_cards(screen)
+
+    def _draw_pack_opening(self, screen):
+        """パック開封中の描画"""
+        # タイトル（何パック目か）
+        title_text = self.font.render(f"Pack {self.current_pack_index + 1}/{self.destroyed_packs_count}", True, WHITE)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
+        screen.blit(title_text, title_rect)
+
+        # パック本体（下部）
+        pack_body_height = self.pack_height - int(self.pack_height * 0.3 * (self.opening_progress / 100))
+        pygame.draw.rect(screen, BLUE,
+                        (self.pack_x, self.pack_y + (self.pack_height - pack_body_height),
+                         self.pack_width, pack_body_height))
+        pygame.draw.rect(screen, WHITE,
+                        (self.pack_x, self.pack_y + (self.pack_height - pack_body_height),
+                         self.pack_width, pack_body_height), 3)
+
+        # パック上部（切り取られる部分）
+        if self.opening_progress < 100:
+            top_height = int(self.pack_height * 0.3 * (1 - self.opening_progress / 100))
+            top_y = self.pack_y + (self.pack_height * 0.3 - top_height)
+            pygame.draw.rect(screen, BLUE,
+                            (self.pack_x, top_y, self.pack_width, top_height))
+            pygame.draw.rect(screen, WHITE,
+                            (self.pack_x, top_y, self.pack_width, top_height), 3)
+
+        # ★マーク
+        star_text = self.font.render("★", True, YELLOW)
+        star_rect = star_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen.blit(star_text, star_rect)
+
+        # 操作案内
+        guide_text = self.small_font.render("Press Arrow Keys to Open!", True, WHITE)
+        guide_rect = guide_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        screen.blit(guide_text, guide_rect)
+
+        # 進行度バー
+        bar_width = 300
+        bar_height = 20
+        bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+        bar_y = SCREEN_HEIGHT // 2 + self.pack_height // 2 + 50
+        pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+        pygame.draw.rect(screen, GREEN, (bar_x, bar_y, int(bar_width * self.opening_progress / 100), bar_height))
+
+    def _draw_opened_cards(self, screen):
+        """開封後のカード表示"""
+        # タイトル
+        title_text = self.font.render("Pack Opened!", True, YELLOW)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
+        screen.blit(title_text, title_rect)
+
+        # カードを横並びに表示
+        card_width = 80
+        card_height = 120
+        spacing = 20
+        total_width = card_width * 5 + spacing * 4
+        start_x = SCREEN_WIDTH // 2 - total_width // 2
+        start_y = SCREEN_HEIGHT // 2 - card_height // 2
+
+        for i, card in enumerate(self.current_cards):
+            x = start_x + i * (card_width + spacing)
+            # カード本体
+            pygame.draw.rect(screen, card['color'], (x, start_y, card_width, card_height))
+            pygame.draw.rect(screen, WHITE, (x, start_y, card_width, card_height), 2)
+
+            # カード名
+            name_text = self.small_font.render(card['name'], True, WHITE)
+            name_rect = name_text.get_rect(center=(x + card_width // 2, start_y + card_height // 2))
+            screen.blit(name_text, name_rect)
+
+        # 次のパックまたは結果へ進む案内
+        if self.current_pack_index < self.destroyed_packs_count - 1:
+            next_text = self.small_font.render("Press SPACE for Next Pack", True, WHITE)
+        else:
+            next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
+        next_rect = next_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        screen.blit(next_text, next_rect)
+
+    def next_pack(self):
+        """次のパックへ"""
+        if self.current_pack_index < self.destroyed_packs_count - 1:
+            self.current_pack_index += 1
+            self.opening_progress = 0
+            self.is_opened = False
+            self.current_cards = self._generate_dummy_cards()
+            return True
+        return False
+
+    def is_finished(self):
+        """全パックの開封が完了したか"""
+        return self.is_opened and self.current_pack_index >= self.destroyed_packs_count - 1
+
+
 class Game:
     """メインゲームクラス"""
     def __init__(self):
@@ -146,7 +293,7 @@ class Game:
         pygame.display.set_caption("PokePoke - Card Pack Sniper")
         self.clock = pygame.time.Clock()
         self.running = True
-        self.game_over = False
+        self.state = STATE_SHOOTING
 
         # ゲーム要素の初期化
         self.crosshair = Crosshair()
@@ -154,9 +301,14 @@ class Game:
         self.cards = []
         self.ammo = INITIAL_AMMO
         self.start_time = pygame.time.get_ticks()  # ゲーム開始時刻
+        self.is_cleared = False  # クリアしたかどうか
+        self.clear_time = 0  # クリアタイム
 
         # カードパックの配置 (左右に5個ずつ)
         self._setup_card_packs()
+
+        # パック開封シーン
+        self.pack_opening = None
 
         # フォント
         self.font = pygame.font.Font(None, 36)
@@ -164,40 +316,25 @@ class Game:
 
     def _setup_card_packs(self):
         """カードパックをトランプの5のパターンで配置"""
-        # 左側エリアの中心座標
-        left_center_x = SCREEN_WIDTH // 4
         center_y = SCREEN_HEIGHT // 2
-
-        # 右側エリアの中心座標
-        right_center_x = SCREEN_WIDTH * 3 // 4
-
-        # オフセット（4隅からの距離）
         offset_x = 120
         offset_y = 180
 
-        # 左側に5個（トランプの5のパターン）
-        left_positions = [
-            (left_center_x - offset_x, center_y - offset_y),  # 左上
-            (left_center_x + offset_x, center_y - offset_y),  # 右上
-            (left_center_x, center_y),                        # 中央
-            (left_center_x - offset_x, center_y + offset_y),  # 左下
-            (left_center_x + offset_x, center_y + offset_y),  # 右下
-        ]
+        # 左側と右側の中心X座標
+        centers_x = [SCREEN_WIDTH // 4, SCREEN_WIDTH * 3 // 4]
 
-        for x, y in left_positions:
-            self.card_packs.append(CardPack(x, y))
+        # 各中心点に対してトランプの5のパターンで配置
+        for center_x in centers_x:
+            positions = [
+                (center_x - offset_x, center_y - offset_y),  # 左上
+                (center_x + offset_x, center_y - offset_y),  # 右上
+                (center_x, center_y),                        # 中央
+                (center_x - offset_x, center_y + offset_y),  # 左下
+                (center_x + offset_x, center_y + offset_y),  # 右下
+            ]
 
-        # 右側に5個（トランプの5のパターン）
-        right_positions = [
-            (right_center_x - offset_x, center_y - offset_y),  # 左上
-            (right_center_x + offset_x, center_y - offset_y),  # 右上
-            (right_center_x, center_y),                        # 中央
-            (right_center_x - offset_x, center_y + offset_y),  # 左下
-            (right_center_x + offset_x, center_y + offset_y),  # 右下
-        ]
-
-        for x, y in right_positions:
-            self.card_packs.append(CardPack(x, y))
+            for x, y in positions:
+                self.card_packs.append(CardPack(x, y))
 
     def handle_events(self):
         """イベント処理"""
@@ -205,10 +342,17 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and not self.game_over:
-                    self._fire()
-                elif event.key == pygame.K_r and self.game_over:
-                    self._restart()
+                if self.state == STATE_SHOOTING:
+                    if event.key == pygame.K_SPACE:
+                        self._fire()
+                elif self.state == STATE_PACK_OPENING:
+                    if event.key == pygame.K_SPACE and self.pack_opening.is_opened:
+                        # 次のパックへ、または結果画面へ
+                        if not self.pack_opening.next_pack():
+                            self.state = STATE_RESULT
+                elif self.state == STATE_RESULT:
+                    if event.key == pygame.K_r:
+                        self._restart()
 
     def _fire(self):
         """照準位置でヒット判定"""
@@ -232,30 +376,36 @@ class Game:
         self.card_packs.clear()
         self.cards.clear()
         self.ammo = INITIAL_AMMO
-        self.game_over = False
+        self.is_cleared = False
+        self.clear_time = 0
         self.start_time = pygame.time.get_ticks()  # タイマーをリセット
+        self.state = STATE_SHOOTING
+        self.pack_opening = None
         self._setup_card_packs()
 
     def update(self):
         """ゲーム状態の更新"""
-        if self.game_over:
-            return
-
         keys = pygame.key.get_pressed()
-        self.crosshair.update(keys)
 
-        # カードパックの更新（左右移動）
-        for pack in self.card_packs:
-            pack.update()
+        if self.state == STATE_SHOOTING:
+            self.crosshair.update(keys)
 
-        # カードの更新
-        for card in self.cards[:]:
-            card.update()
-            if not card.active:
-                self.cards.remove(card)
+            # カードパックの更新（左右移動）
+            for pack in self.card_packs:
+                pack.update()
 
-        # ゲームオーバー判定
-        self._check_game_over()
+            # カードの更新
+            for card in self.cards[:]:
+                card.update()
+                if not card.active:
+                    self.cards.remove(card)
+
+            # ゲームオーバー判定
+            self._check_game_over()
+
+        elif self.state == STATE_PACK_OPENING:
+            if self.pack_opening:
+                self.pack_opening.handle_input(keys)
 
     def _get_remaining_time(self):
         """残り時間を計算（秒）"""
@@ -265,39 +415,59 @@ class Game:
 
     def _check_game_over(self):
         """ゲームオーバー条件をチェック"""
-        # 弾切れ
-        if self.ammo == 0:
-            self.game_over = True
+        shooting_ended = False
 
-        # 全カードパック破壊
+        # 全カードパック破壊（クリア）
         all_destroyed = all(pack.destroyed for pack in self.card_packs)
         if all_destroyed:
-            self.game_over = True
+            self.is_cleared = True
+            elapsed_time = (pygame.time.get_ticks() - self.start_time) / 1000
+            self.clear_time = elapsed_time
+            shooting_ended = True
+
+        # 弾切れ
+        if self.ammo == 0:
+            shooting_ended = True
 
         # 制限時間切れ
         if self._get_remaining_time() <= 0:
-            self.game_over = True
+            shooting_ended = True
+
+        # シューティング終了時、パック開封シーンへ遷移
+        if shooting_ended:
+            destroyed_count = sum(1 for pack in self.card_packs if pack.destroyed)
+            if destroyed_count > 0:
+                self.pack_opening = PackOpening(destroyed_count)
+                self.state = STATE_PACK_OPENING
+            else:
+                # パックを1つも破壊していない場合は結果画面へ
+                self.state = STATE_RESULT
 
     def draw(self):
         """画面描画"""
-        self.screen.fill(BLACK)
+        if self.state == STATE_SHOOTING:
+            self.screen.fill(BLACK)
 
-        # カードパックを描画
-        for pack in self.card_packs:
-            pack.draw(self.screen)
+            # カードパックを描画
+            for pack in self.card_packs:
+                pack.draw(self.screen)
 
-        # カードを描画
-        for card in self.cards:
-            card.draw(self.screen)
+            # カードを描画
+            for card in self.cards:
+                card.draw(self.screen)
 
-        # 照準を描画
-        self.crosshair.draw(self.screen)
+            # 照準を描画
+            self.crosshair.draw(self.screen)
 
-        # UI描画
-        self._draw_ui()
+            # UI描画
+            self._draw_ui()
 
-        # ゲームオーバー画面
-        if self.game_over:
+        elif self.state == STATE_PACK_OPENING:
+            if self.pack_opening:
+                self.pack_opening.draw(self.screen)
+
+        elif self.state == STATE_RESULT:
+            self.screen.fill(BLACK)
             self._draw_game_over()
 
         pygame.display.flip()
@@ -331,10 +501,13 @@ class Game:
         overlay.fill(BLACK)
         self.screen.blit(overlay, (0, 0))
 
-        # GAME OVER テキスト
-        game_over_text = self.big_font.render("GAME OVER", True, RED)
-        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-        self.screen.blit(game_over_text, text_rect)
+        # タイトルテキスト（クリアか失敗か）
+        if self.is_cleared:
+            title_text = self.big_font.render("CLEAR!", True, GREEN)
+        else:
+            title_text = self.big_font.render("GAME OVER", True, RED)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+        self.screen.blit(title_text, title_rect)
 
         # 結果
         destroyed = sum(1 for pack in self.card_packs if pack.destroyed)
@@ -345,9 +518,21 @@ class Game:
         result_rect = result_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20))
         self.screen.blit(result_text, result_rect)
 
+        # クリアタイム表示（クリアした場合のみ）
+        if self.is_cleared:
+            clear_time_text = self.font.render(
+                f"Clear Time: {self.clear_time:.2f}s",
+                True, YELLOW
+            )
+            clear_time_rect = clear_time_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
+            self.screen.blit(clear_time_text, clear_time_rect)
+            restart_y = SCREEN_HEIGHT // 2 + 110
+        else:
+            restart_y = SCREEN_HEIGHT // 2 + 70
+
         # リスタート案内
         restart_text = self.font.render("Press R to Restart", True, YELLOW)
-        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 70))
+        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, restart_y))
         self.screen.blit(restart_text, restart_rect)
 
     def run(self):
