@@ -32,6 +32,30 @@ STATE_PACK_OPENING = "pack_opening"
 STATE_CARD_COLLECTION = "card_collection"
 STATE_RESULT = "result"
 
+# カードマスターデータ（20種類）
+CARD_MASTER_DATA = [
+    {"id": 1, "name": "Fire Dragon", "color": RED, "rarity": "Super Rare"},
+    {"id": 2, "name": "Water Spirit", "color": BLUE, "rarity": "Rare"},
+    {"id": 3, "name": "Earth Golem", "color": GREEN, "rarity": "Common"},
+    {"id": 4, "name": "Thunder Bird", "color": YELLOW, "rarity": "Rare"},
+    {"id": 5, "name": "Dark Knight", "color": PURPLE, "rarity": "Super Rare"},
+    {"id": 6, "name": "Light Angel", "color": WHITE, "rarity": "Super Rare"},
+    {"id": 7, "name": "Ice Phoenix", "color": BLUE, "rarity": "Rare"},
+    {"id": 8, "name": "Forest Elf", "color": GREEN, "rarity": "Common"},
+    {"id": 9, "name": "Flame Wizard", "color": ORANGE, "rarity": "Rare"},
+    {"id": 10, "name": "Wind Fairy", "color": (173, 216, 230), "rarity": "Common"},
+    {"id": 11, "name": "Rock Giant", "color": (139, 69, 19), "rarity": "Common"},
+    {"id": 12, "name": "Storm Dragon", "color": YELLOW, "rarity": "Super Rare"},
+    {"id": 13, "name": "Shadow Assassin", "color": (64, 64, 64), "rarity": "Rare"},
+    {"id": 14, "name": "Crystal Guardian", "color": (147, 112, 219), "rarity": "Rare"},
+    {"id": 15, "name": "Magma Titan", "color": ORANGE, "rarity": "Super Rare"},
+    {"id": 16, "name": "Ocean Leviathan", "color": BLUE, "rarity": "Super Rare"},
+    {"id": 17, "name": "Sky Pegasus", "color": (135, 206, 250), "rarity": "Common"},
+    {"id": 18, "name": "Jungle Tiger", "color": GREEN, "rarity": "Common"},
+    {"id": 19, "name": "Desert Sphinx", "color": (210, 180, 140), "rarity": "Rare"},
+    {"id": 20, "name": "Mystic Unicorn", "color": PURPLE, "rarity": "Rare"},
+]
+
 
 class Crosshair:
     """照準クラス"""
@@ -117,11 +141,36 @@ def create_dummy_card_image(width, height, color, name):
     surface.fill(color)
     # 枠線
     pygame.draw.rect(surface, WHITE, (0, 0, width, height), 2)
-    # カード名
-    font = pygame.font.Font(None, 24)
-    name_text = font.render(name, True, WHITE)
-    name_rect = name_text.get_rect(center=(width // 2, height // 2))
-    surface.blit(name_text, name_rect)
+
+    # カード名（複数行対応）
+    font = pygame.font.Font(None, 18)
+    words = name.split()
+    lines = []
+    current_line = ""
+
+    # テキストを適切に分割
+    for word in words:
+        test_line = current_line + word + " " if current_line else word
+        test_surface = font.render(test_line, True, WHITE)
+        if test_surface.get_width() <= width - 4:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line.strip())
+            current_line = word + " "
+    if current_line:
+        lines.append(current_line.strip())
+
+    # 複数行を中央に配置
+    line_height = 20
+    total_height = len(lines) * line_height
+    start_y = (height - total_height) // 2
+
+    for i, line in enumerate(lines):
+        text_surface = font.render(line, True, WHITE)
+        text_rect = text_surface.get_rect(center=(width // 2, start_y + i * line_height))
+        surface.blit(text_surface, text_rect)
+
     return surface
 
 
@@ -202,19 +251,21 @@ class PackOpening:
         self.small_font = pygame.font.Font(None, 24)
 
     def _generate_dummy_cards(self):
-        """ダミーカードを生成"""
-        colors = [RED, BLUE, GREEN, PURPLE, ORANGE]
+        """ランダムにカードを生成（同じパック内で重複なし）"""
         card_width = 80
         card_height = 120
+
+        # 20種類のカードからランダムに5枚を選択（重複なし）
+        selected_cards = random.sample(CARD_MASTER_DATA, CARDS_PER_PACK)
+
         cards = []
-        for i in range(CARDS_PER_PACK):
-            name = f'Card {i+1}'
-            color = colors[i % len(colors)]
+        for card_data in selected_cards:
             cards.append({
-                'name': name,
-                'color': color,
-                'rarity': ['Common', 'Rare', 'Super Rare'][i % 3],
-                'image': create_dummy_card_image(card_width, card_height, color, name)
+                'id': card_data['id'],
+                'name': card_data['name'],
+                'color': card_data['color'],
+                'rarity': card_data['rarity'],
+                'image': create_dummy_card_image(card_width, card_height, card_data['color'], card_data['name'])
             })
         return cards
 
