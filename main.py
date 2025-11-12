@@ -91,6 +91,39 @@ class Card:
                         (self.x, self.y, self.width, self.height), 2)
 
 
+def create_dummy_pack_image(width, height):
+    """ダミーのパック画像を生成"""
+    surface = pygame.Surface((width, height))
+    surface.fill(BLUE)
+    # 枠線
+    pygame.draw.rect(surface, WHITE, (0, 0, width, height), 3)
+    # ★マーク
+    font = pygame.font.Font(None, 60)
+    star = font.render("★", True, YELLOW)
+    star_rect = star.get_rect(center=(width // 2, height // 2))
+    surface.blit(star, star_rect)
+    # PACK テキスト
+    text_font = pygame.font.Font(None, 36)
+    pack_text = text_font.render("PACK", True, WHITE)
+    pack_rect = pack_text.get_rect(center=(width // 2, height - 30))
+    surface.blit(pack_text, pack_rect)
+    return surface
+
+
+def create_dummy_card_image(width, height, color, name):
+    """ダミーのカード画像を生成"""
+    surface = pygame.Surface((width, height))
+    surface.fill(color)
+    # 枠線
+    pygame.draw.rect(surface, WHITE, (0, 0, width, height), 2)
+    # カード名
+    font = pygame.font.Font(None, 24)
+    name_text = font.render(name, True, WHITE)
+    name_rect = name_text.get_rect(center=(width // 2, height // 2))
+    surface.blit(name_text, name_rect)
+    return surface
+
+
 class CardPack:
     """カードパッククラス"""
     def __init__(self, x, y):
@@ -156,6 +189,9 @@ class PackOpening:
         self.pack_x = SCREEN_WIDTH // 2 - self.pack_width // 2
         self.pack_y = SCREEN_HEIGHT // 2 - self.pack_height // 2
 
+        # パック画像
+        self.pack_image = create_dummy_pack_image(self.pack_width, self.pack_height)
+
         # ダミーカードデータ
         self.current_cards = self._generate_dummy_cards()
 
@@ -166,12 +202,17 @@ class PackOpening:
     def _generate_dummy_cards(self):
         """ダミーカードを生成"""
         colors = [RED, BLUE, GREEN, PURPLE, ORANGE]
+        card_width = 80
+        card_height = 120
         cards = []
         for i in range(CARDS_PER_PACK):
+            name = f'Card {i+1}'
+            color = colors[i % len(colors)]
             cards.append({
-                'name': f'Card {i+1}',
-                'color': colors[i % len(colors)],
-                'rarity': ['Common', 'Rare', 'Super Rare'][i % 3]
+                'name': name,
+                'color': color,
+                'rarity': ['Common', 'Rare', 'Super Rare'][i % 3],
+                'image': create_dummy_card_image(card_width, card_height, color, name)
             })
         return cards
 
@@ -201,28 +242,27 @@ class PackOpening:
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
         screen.blit(title_text, title_rect)
 
-        # パック本体（下部）
-        pack_body_height = self.pack_height - int(self.pack_height * 0.3 * (self.opening_progress / 100))
-        pygame.draw.rect(screen, BLUE,
-                        (self.pack_x, self.pack_y + (self.pack_height - pack_body_height),
-                         self.pack_width, pack_body_height))
-        pygame.draw.rect(screen, WHITE,
-                        (self.pack_x, self.pack_y + (self.pack_height - pack_body_height),
-                         self.pack_width, pack_body_height), 3)
+        # 切り取られる上部の高さ
+        cut_height = int(self.pack_height * 0.3 * (self.opening_progress / 100))
 
-        # パック上部（切り取られる部分）
+        # パック本体（下部）- 画像の下部分を描画
+        pack_body_start_y = cut_height
+        pack_body_height = self.pack_height - cut_height
+        if pack_body_height > 0:
+            # 画像の下部分を切り取って描画
+            pack_body_area = pygame.Rect(0, pack_body_start_y, self.pack_width, pack_body_height)
+            pack_body_surface = self.pack_image.subsurface(pack_body_area)
+            screen.blit(pack_body_surface, (self.pack_x, self.pack_y + cut_height))
+
+        # パック上部（切り取られる部分）- 画像の上部分を描画
         if self.opening_progress < 100:
             top_height = int(self.pack_height * 0.3 * (1 - self.opening_progress / 100))
-            top_y = self.pack_y + (self.pack_height * 0.3 - top_height)
-            pygame.draw.rect(screen, BLUE,
-                            (self.pack_x, top_y, self.pack_width, top_height))
-            pygame.draw.rect(screen, WHITE,
-                            (self.pack_x, top_y, self.pack_width, top_height), 3)
-
-        # ★マーク
-        star_text = self.font.render("★", True, YELLOW)
-        star_rect = star_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-        screen.blit(star_text, star_rect)
+            if top_height > 0:
+                # 画像の上部分を切り取って描画（上に移動していく演出）
+                top_area = pygame.Rect(0, 0, self.pack_width, top_height)
+                top_surface = self.pack_image.subsurface(top_area)
+                top_y = self.pack_y - (int(self.pack_height * 0.3) - top_height)
+                screen.blit(top_surface, (self.pack_x, top_y))
 
         # 操作案内
         guide_text = self.small_font.render("Press Arrow Keys to Open!", True, WHITE)
@@ -254,14 +294,8 @@ class PackOpening:
 
         for i, card in enumerate(self.current_cards):
             x = start_x + i * (card_width + spacing)
-            # カード本体
-            pygame.draw.rect(screen, card['color'], (x, start_y, card_width, card_height))
-            pygame.draw.rect(screen, WHITE, (x, start_y, card_width, card_height), 2)
-
-            # カード名
-            name_text = self.small_font.render(card['name'], True, WHITE)
-            name_rect = name_text.get_rect(center=(x + card_width // 2, start_y + card_height // 2))
-            screen.blit(name_text, name_rect)
+            # カード画像を描画
+            screen.blit(card['image'], (x, start_y))
 
         # 次のパックまたは結果へ進む案内
         if self.current_pack_index < self.destroyed_packs_count - 1:
