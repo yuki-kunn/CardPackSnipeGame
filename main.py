@@ -6,8 +6,8 @@ import sys
 pygame.init()
 
 # 定数
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+DEFAULT_SCREEN_WIDTH = 800
+DEFAULT_SCREEN_HEIGHT = 600
 FPS = 60
 
 # 色定義
@@ -59,11 +59,15 @@ CARD_MASTER_DATA = [
 
 class Crosshair:
     """照準クラス"""
-    def __init__(self):
-        self.x = SCREEN_WIDTH // 2
-        self.y = SCREEN_HEIGHT // 2
-        self.size = 20
-        self.speed = 5
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.x = screen_width // 2
+        self.y = screen_height // 2
+        # 画面サイズに応じてサイズをスケーリング
+        scale = min(screen_width / DEFAULT_SCREEN_WIDTH, screen_height / DEFAULT_SCREEN_HEIGHT)
+        self.size = int(20 * scale)
+        self.speed = max(3, int(5 * scale))
 
     def get_rect(self):
         """衝突判定用の矩形を返す"""
@@ -74,12 +78,24 @@ class Crosshair:
         """矢印キーで照準を移動"""
         if keys[pygame.K_LEFT] and self.x > self.size:
             self.x -= self.speed
-        if keys[pygame.K_RIGHT] and self.x < SCREEN_WIDTH - self.size:
+        if keys[pygame.K_RIGHT] and self.x < self.screen_width - self.size:
             self.x += self.speed
         if keys[pygame.K_UP] and self.y > self.size:
             self.y -= self.speed
-        if keys[pygame.K_DOWN] and self.y < SCREEN_HEIGHT - self.size:
+        if keys[pygame.K_DOWN] and self.y < self.screen_height - self.size:
             self.y += self.speed
+
+    def update_screen_size(self, screen_width, screen_height):
+        """画面サイズ更新時に照準位置を調整"""
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        # サイズをスケーリング
+        scale = min(screen_width / DEFAULT_SCREEN_WIDTH, screen_height / DEFAULT_SCREEN_HEIGHT)
+        self.size = int(20 * scale)
+        self.speed = max(3, int(5 * scale))
+        # 照準が画面外に出ないように調整
+        self.x = min(self.x, screen_width - self.size)
+        self.y = min(self.y, screen_height - self.size)
 
     def draw(self, screen):
         """照準を描画"""
@@ -93,27 +109,26 @@ class Crosshair:
 
 class Card:
     """カードクラス"""
-    def __init__(self, x, y):
+    def __init__(self, x, y, scale=1.0):
         self.x = x
         self.y = y
-        self.width = 40
-        self.height = 60
-        self.speed = 3
+        self.scale = scale
+        self.width = int(40 * scale)
+        self.height = int(60 * scale)
+        self.speed = 3 * scale
         self.color = random.choice([RED, BLUE, GREEN, PURPLE, ORANGE])
         self.active = True
 
     def update(self):
         """カードを下に落とす"""
         self.y += self.speed
-        if self.y > SCREEN_HEIGHT:
-            self.active = False
 
     def draw(self, screen):
         """カードを描画"""
         pygame.draw.rect(screen, self.color,
                         (self.x, self.y, self.width, self.height))
         pygame.draw.rect(screen, WHITE,
-                        (self.x, self.y, self.width, self.height), 2)
+                        (self.x, self.y, self.width, self.height), max(1, int(2 * self.scale)))
 
 
 def create_dummy_pack_image(width, height):
@@ -176,19 +191,20 @@ def create_dummy_card_image(width, height, color, name):
 
 class CardPack:
     """カードパッククラス"""
-    def __init__(self, x, y):
+    def __init__(self, x, y, scale=1.0):
         self.x = x
         self.y = y
         self.initial_x = x  # 初期位置を記憶
-        self.width = 60
-        self.height = 80
+        self.scale = scale
+        self.width = int(60 * scale)
+        self.height = int(80 * scale)
         self.destroyed = False
         self.color = BLUE
 
-        # ランダムな左右移動
-        self.speed = random.uniform(1, 3)  # ランダムな速度
+        # ランダムな左右移動（スケールに応じて調整）
+        self.speed = random.uniform(1, 3) * scale  # ランダムな速度
         self.direction = random.choice([-1, 1])  # ランダムな初期方向
-        self.move_range = random.randint(30, 80)  # 移動範囲
+        self.move_range = random.randint(int(30 * scale), int(80 * scale))  # 移動範囲
 
     def update(self):
         """カードパックを左右に動かす"""
@@ -205,11 +221,13 @@ class CardPack:
             pygame.draw.rect(screen, self.color,
                            (self.x, self.y, self.width, self.height))
             pygame.draw.rect(screen, WHITE,
-                           (self.x, self.y, self.width, self.height), 3)
-            # パックの中央に★マーク
-            font = pygame.font.Font(None, 40)
+                           (self.x, self.y, self.width, self.height), int(3 * self.scale))
+            # パックの中央に★マーク（スケールに応じて調整）
+            font_size = int(40 * self.scale)
+            font = pygame.font.Font(None, font_size)
             star = font.render("★", True, YELLOW)
-            screen.blit(star, (self.x + 15, self.y + 20))
+            star_rect = star.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
+            screen.blit(star, star_rect)
 
     def get_rect(self):
         """衝突判定用の矩形を返す"""
@@ -221,40 +239,44 @@ class CardPack:
         cards = []
         for i in range(CARDS_PER_PACK):
             # パックの位置からランダムな方向にカードを散らす
-            offset_x = random.randint(-30, 30)
-            card = Card(self.x + self.width // 2 + offset_x, self.y)
+            offset_x = random.randint(int(-30 * self.scale), int(30 * self.scale))
+            card = Card(self.x + self.width // 2 + offset_x, self.y, self.scale)
             cards.append(card)
         return cards
 
 
 class PackOpening:
     """パック開封シーンクラス"""
-    def __init__(self, destroyed_packs_count):
+    def __init__(self, destroyed_packs_count, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
         self.destroyed_packs_count = destroyed_packs_count
         self.current_pack_index = 0
         self.opening_progress = 0  # 0-100の開封進行度
         self.is_opened = False
-        self.pack_width = 200
-        self.pack_height = 280
-        self.pack_x = SCREEN_WIDTH // 2 - self.pack_width // 2
-        self.pack_y = SCREEN_HEIGHT // 2 - self.pack_height // 2
+
+        # スケール計算
+        scale = min(screen_width / DEFAULT_SCREEN_WIDTH, screen_height / DEFAULT_SCREEN_HEIGHT)
+        self.pack_width = int(200 * scale)
+        self.pack_height = int(280 * scale)
+        self.pack_x = screen_width // 2 - self.pack_width // 2
+        self.pack_y = screen_height // 2 - self.pack_height // 2
 
         # パック画像
         self.pack_image = create_dummy_pack_image(self.pack_width, self.pack_height)
 
         # ダミーカードデータ
+        self.card_width = int(80 * scale)
+        self.card_height = int(120 * scale)
         self.current_cards = self._generate_dummy_cards()
         self.all_cards = []  # 獲得した全カードを保存
 
         # フォント
-        self.font = pygame.font.Font(None, 36)
-        self.small_font = pygame.font.Font(None, 24)
+        self.font = pygame.font.Font(None, int(36 * scale))
+        self.small_font = pygame.font.Font(None, int(24 * scale))
 
     def _generate_dummy_cards(self):
         """ランダムにカードを生成（同じパック内で重複なし）"""
-        card_width = 80
-        card_height = 120
-
         # 20種類のカードからランダムに5枚を選択（重複なし）
         selected_cards = random.sample(CARD_MASTER_DATA, CARDS_PER_PACK)
 
@@ -265,7 +287,7 @@ class PackOpening:
                 'name': card_data['name'],
                 'color': card_data['color'],
                 'rarity': card_data['rarity'],
-                'image': create_dummy_card_image(card_width, card_height, card_data['color'], card_data['name'])
+                'image': create_dummy_card_image(self.card_width, self.card_height, card_data['color'], card_data['name'])
             })
         return cards
 
@@ -292,9 +314,11 @@ class PackOpening:
 
     def _draw_pack_opening(self, screen):
         """パック開封中の描画"""
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+
         # タイトル（何パック目か）
         title_text = self.font.render(f"Pack {self.current_pack_index + 1}/{self.destroyed_packs_count}", True, WHITE)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, int(30 * scale)))
         screen.blit(title_text, title_rect)
 
         # 切り取られる上部の高さ
@@ -321,34 +345,33 @@ class PackOpening:
 
         # 操作案内
         guide_text = self.small_font.render("Press Arrow Keys to Open!", True, WHITE)
-        guide_rect = guide_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        guide_rect = guide_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
         screen.blit(guide_text, guide_rect)
 
         # 進行度バー
-        bar_width = 300
-        bar_height = 20
-        bar_x = SCREEN_WIDTH // 2 - bar_width // 2
-        bar_y = SCREEN_HEIGHT // 2 + self.pack_height // 2 + 50
-        pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+        bar_width = int(300 * scale)
+        bar_height = int(20 * scale)
+        bar_x = self.screen_width // 2 - bar_width // 2
+        bar_y = self.screen_height // 2 + self.pack_height // 2 + int(50 * scale)
+        pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), max(1, int(2 * scale)))
         pygame.draw.rect(screen, GREEN, (bar_x, bar_y, int(bar_width * self.opening_progress / 100), bar_height))
 
     def _draw_opened_cards(self, screen):
         """開封後のカード表示"""
         # タイトル
         title_text = self.font.render("Pack Opened!", True, YELLOW)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, int(50 * scale)))
         screen.blit(title_text, title_rect)
 
         # カードを横並びに表示
-        card_width = 80
-        card_height = 120
-        spacing = 20
-        total_width = card_width * 5 + spacing * 4
-        start_x = SCREEN_WIDTH // 2 - total_width // 2
-        start_y = SCREEN_HEIGHT // 2 - card_height // 2
+        spacing = int(20 * scale)
+        total_width = self.card_width * 5 + spacing * 4
+        start_x = self.screen_width // 2 - total_width // 2
+        start_y = self.screen_height // 2 - self.card_height // 2
 
         for i, card in enumerate(self.current_cards):
-            x = start_x + i * (card_width + spacing)
+            x = start_x + i * (self.card_width + spacing)
             # カード画像を描画
             screen.blit(card['image'], (x, start_y))
 
@@ -357,7 +380,7 @@ class PackOpening:
             next_text = self.small_font.render("Press SPACE for Next Pack", True, WHITE)
         else:
             next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
-        next_rect = next_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
         screen.blit(next_text, next_rect)
 
     def next_pack(self):
@@ -378,50 +401,89 @@ class PackOpening:
         """獲得カード一覧を描画"""
         screen.fill(BLACK)
 
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+
         # タイトル
         title_text = self.font.render("All Cards Collected!", True, YELLOW)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, int(30 * scale)))
         screen.blit(title_text, title_rect)
 
         # カード総数表示
         total_text = self.small_font.render(f"Total: {len(self.all_cards)} cards", True, WHITE)
-        total_rect = total_text.get_rect(center=(SCREEN_WIDTH // 2, 70))
+        total_rect = total_text.get_rect(center=(self.screen_width // 2, int(70 * scale)))
         screen.blit(total_text, total_rect)
 
-        # カードをグリッド表示
-        card_width = 80
-        card_height = 120
-        spacing = 15
-        cards_per_row = 8
-        start_x = (SCREEN_WIDTH - (card_width * cards_per_row + spacing * (cards_per_row - 1))) // 2
-        start_y = 110
+        if len(self.all_cards) == 0:
+            return
+
+        # 利用可能な画面領域を計算
+        header_height = int(110 * scale)
+        footer_height = int(60 * scale)
+        available_height = self.screen_height - header_height - footer_height
+        available_width = self.screen_width - int(40 * scale)
+
+        # カード枚数から最適なサイズを計算
+        card_count = len(self.all_cards)
+        base_card_width = self.card_width
+        base_card_height = self.card_height
+        spacing = int(15 * scale)
+
+        # 1行のカード枚数を仮決定
+        cards_per_row = max(1, available_width // (base_card_width + spacing))
+        total_rows = (card_count + cards_per_row - 1) // cards_per_row
+
+        # 高さがオーバーする場合、カードサイズを縮小
+        total_height_needed = total_rows * (base_card_height + spacing)
+        if total_height_needed > available_height:
+            # 縮小率を計算
+            shrink_ratio = available_height / total_height_needed
+            display_card_width = int(base_card_width * shrink_ratio)
+            display_card_height = int(base_card_height * shrink_ratio)
+            spacing = max(5, int(spacing * shrink_ratio))
+
+            # 再計算
+            cards_per_row = max(1, available_width // (display_card_width + spacing))
+        else:
+            display_card_width = base_card_width
+            display_card_height = base_card_height
+
+        # グリッド描画の開始位置を計算
+        actual_row_width = cards_per_row * display_card_width + (cards_per_row - 1) * spacing
+        start_x = (self.screen_width - actual_row_width) // 2
+        start_y = header_height
 
         for i, card in enumerate(self.all_cards):
             row = i // cards_per_row
             col = i % cards_per_row
-            x = start_x + col * (card_width + spacing)
-            y = start_y + row * (card_height + spacing)
+            x = start_x + col * (display_card_width + spacing)
+            y = start_y + row * (display_card_height + spacing)
 
-            # カード画像を描画
-            screen.blit(card['image'], (x, y))
+            # カード画像をスケーリングして描画
+            if display_card_width != card['image'].get_width():
+                scaled_image = pygame.transform.scale(card['image'], (display_card_width, display_card_height))
+                screen.blit(scaled_image, (x, y))
+            else:
+                screen.blit(card['image'], (x, y))
 
         # 次へ進む案内
         next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
-        next_rect = next_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(30 * scale)))
         screen.blit(next_text, next_rect)
 
 
 class Game:
     """メインゲームクラス"""
     def __init__(self):
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen_width = DEFAULT_SCREEN_WIDTH
+        self.screen_height = DEFAULT_SCREEN_HEIGHT
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
         pygame.display.set_caption("PokePoke - Card Pack Sniper")
         self.clock = pygame.time.Clock()
         self.running = True
         self.state = STATE_SHOOTING
 
         # ゲーム要素の初期化
-        self.crosshair = Crosshair()
+        self.crosshair = Crosshair(self.screen_width, self.screen_height)
         self.card_packs = []
         self.cards = []
         self.ammo = INITIAL_AMMO
@@ -435,18 +497,22 @@ class Game:
         # パック開封シーン
         self.pack_opening = None
 
-        # フォント
-        self.font = pygame.font.Font(None, 36)
-        self.big_font = pygame.font.Font(None, 72)
+        # フォント（スケール対応）
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+        self.font = pygame.font.Font(None, int(36 * scale))
+        self.big_font = pygame.font.Font(None, int(72 * scale))
 
     def _setup_card_packs(self):
-        """カードパックをトランプの5のパターンで配置"""
-        center_y = SCREEN_HEIGHT // 2
-        offset_x = 120
-        offset_y = 180
+        """カードパックをトランプの5のパターンで配置（レスポンシブ）"""
+        center_y = self.screen_height // 2
+        # スケール計算
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+        # 画面サイズに応じてオフセットを調整
+        offset_x = int(120 * scale)
+        offset_y = int(180 * scale)
 
         # 左側と右側の中心X座標
-        centers_x = [SCREEN_WIDTH // 4, SCREEN_WIDTH * 3 // 4]
+        centers_x = [self.screen_width // 4, self.screen_width * 3 // 4]
 
         # 各中心点に対してトランプの5のパターンで配置
         for center_x in centers_x:
@@ -459,13 +525,42 @@ class Game:
             ]
 
             for x, y in positions:
-                self.card_packs.append(CardPack(x, y))
+                self.card_packs.append(CardPack(x, y, scale))
 
     def handle_events(self):
         """イベント処理"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.VIDEORESIZE:
+                # ウィンドウリサイズ処理
+                self.screen_width = event.w
+                self.screen_height = event.h
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
+                scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+
+                # フォントを更新
+                self.font = pygame.font.Font(None, int(36 * scale))
+                self.big_font = pygame.font.Font(None, int(72 * scale))
+
+                # 照準の画面サイズを更新
+                self.crosshair.update_screen_size(self.screen_width, self.screen_height)
+                # カードパックの位置を再計算
+                self.card_packs.clear()
+                self._setup_card_packs()
+                # パック開封シーンの画面サイズを更新
+                if self.pack_opening:
+                    self.pack_opening.screen_width = self.screen_width
+                    self.pack_opening.screen_height = self.screen_height
+                    self.pack_opening.pack_width = int(200 * scale)
+                    self.pack_opening.pack_height = int(280 * scale)
+                    self.pack_opening.pack_x = self.screen_width // 2 - self.pack_opening.pack_width // 2
+                    self.pack_opening.pack_y = self.screen_height // 2 - self.pack_opening.pack_height // 2
+                    self.pack_opening.pack_image = create_dummy_pack_image(self.pack_opening.pack_width, self.pack_opening.pack_height)
+                    self.pack_opening.card_width = int(80 * scale)
+                    self.pack_opening.card_height = int(120 * scale)
+                    self.pack_opening.font = pygame.font.Font(None, int(36 * scale))
+                    self.pack_opening.small_font = pygame.font.Font(None, int(24 * scale))
             elif event.type == pygame.KEYDOWN:
                 if self.state == STATE_SHOOTING:
                     if event.key == pygame.K_SPACE:
@@ -525,7 +620,8 @@ class Game:
             # カードの更新
             for card in self.cards[:]:
                 card.update()
-                if not card.active:
+                # 画面外に出たカードを削除
+                if card.y > self.screen_height:
                     self.cards.remove(card)
 
             # ゲームオーバー判定
@@ -565,7 +661,7 @@ class Game:
         if shooting_ended:
             destroyed_count = sum(1 for pack in self.card_packs if pack.destroyed)
             if destroyed_count > 0:
-                self.pack_opening = PackOpening(destroyed_count)
+                self.pack_opening = PackOpening(destroyed_count, self.screen_width, self.screen_height)
                 self.state = STATE_PACK_OPENING
             else:
                 # パックを1つも破壊していない場合は結果画面へ
@@ -623,12 +719,12 @@ class Game:
 
         # 獲得カード数
         cards_text = self.font.render(f"Cards: {len(self.cards)}", True, WHITE)
-        self.screen.blit(cards_text, (SCREEN_WIDTH - 150, 10))
+        self.screen.blit(cards_text, (self.screen_width - 150, 10))
 
     def _draw_game_over(self):
         """ゲームオーバー画面を描画"""
         # 半透明の黒背景
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(200)
         overlay.fill(BLACK)
         self.screen.blit(overlay, (0, 0))
@@ -638,7 +734,7 @@ class Game:
             title_text = self.big_font.render("CLEAR!", True, GREEN)
         else:
             title_text = self.big_font.render("GAME OVER", True, RED)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 - 50))
         self.screen.blit(title_text, title_rect)
 
         # 結果
@@ -647,7 +743,7 @@ class Game:
             f"Packs Destroyed: {destroyed}/{CARD_PACKS_COUNT}",
             True, WHITE
         )
-        result_rect = result_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20))
+        result_rect = result_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 + 20))
         self.screen.blit(result_text, result_rect)
 
         # クリアタイム表示（クリアした場合のみ）
@@ -656,15 +752,15 @@ class Game:
                 f"Clear Time: {self.clear_time:.2f}s",
                 True, YELLOW
             )
-            clear_time_rect = clear_time_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
+            clear_time_rect = clear_time_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 + 60))
             self.screen.blit(clear_time_text, clear_time_rect)
-            restart_y = SCREEN_HEIGHT // 2 + 110
+            restart_y = self.screen_height // 2 + 110
         else:
-            restart_y = SCREEN_HEIGHT // 2 + 70
+            restart_y = self.screen_height // 2 + 70
 
         # リスタート案内
         restart_text = self.font.render("Press R to Restart", True, YELLOW)
-        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, restart_y))
+        restart_rect = restart_text.get_rect(center=(self.screen_width // 2, restart_y))
         self.screen.blit(restart_text, restart_rect)
 
     def run(self):
