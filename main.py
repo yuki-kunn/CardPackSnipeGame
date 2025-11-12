@@ -29,6 +29,7 @@ TIME_LIMIT = 45  # 制限時間（秒）
 # ゲーム状態
 STATE_SHOOTING = "shooting"
 STATE_PACK_OPENING = "pack_opening"
+STATE_CARD_COLLECTION = "card_collection"
 STATE_RESULT = "result"
 
 
@@ -194,6 +195,7 @@ class PackOpening:
 
         # ダミーカードデータ
         self.current_cards = self._generate_dummy_cards()
+        self.all_cards = []  # 獲得した全カードを保存
 
         # フォント
         self.font = pygame.font.Font(None, 36)
@@ -225,6 +227,8 @@ class PackOpening:
                 if self.opening_progress >= 100:
                     self.opening_progress = 100
                     self.is_opened = True
+                    # 開封完了時、獲得カードを全カードリストに追加
+                    self.all_cards.extend(self.current_cards)
 
     def draw(self, screen):
         """描画"""
@@ -319,6 +323,42 @@ class PackOpening:
         """全パックの開封が完了したか"""
         return self.is_opened and self.current_pack_index >= self.destroyed_packs_count - 1
 
+    def draw_card_collection(self, screen):
+        """獲得カード一覧を描画"""
+        screen.fill(BLACK)
+
+        # タイトル
+        title_text = self.font.render("All Cards Collected!", True, YELLOW)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
+        screen.blit(title_text, title_rect)
+
+        # カード総数表示
+        total_text = self.small_font.render(f"Total: {len(self.all_cards)} cards", True, WHITE)
+        total_rect = total_text.get_rect(center=(SCREEN_WIDTH // 2, 70))
+        screen.blit(total_text, total_rect)
+
+        # カードをグリッド表示
+        card_width = 80
+        card_height = 120
+        spacing = 15
+        cards_per_row = 8
+        start_x = (SCREEN_WIDTH - (card_width * cards_per_row + spacing * (cards_per_row - 1))) // 2
+        start_y = 110
+
+        for i, card in enumerate(self.all_cards):
+            row = i // cards_per_row
+            col = i % cards_per_row
+            x = start_x + col * (card_width + spacing)
+            y = start_y + row * (card_height + spacing)
+
+            # カード画像を描画
+            screen.blit(card['image'], (x, y))
+
+        # 次へ進む案内
+        next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
+        next_rect = next_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        screen.blit(next_text, next_rect)
+
 
 class Game:
     """メインゲームクラス"""
@@ -381,9 +421,12 @@ class Game:
                         self._fire()
                 elif self.state == STATE_PACK_OPENING:
                     if event.key == pygame.K_SPACE and self.pack_opening.is_opened:
-                        # 次のパックへ、または結果画面へ
+                        # 次のパックへ、または獲得カード一覧へ
                         if not self.pack_opening.next_pack():
-                            self.state = STATE_RESULT
+                            self.state = STATE_CARD_COLLECTION
+                elif self.state == STATE_CARD_COLLECTION:
+                    if event.key == pygame.K_SPACE:
+                        self.state = STATE_RESULT
                 elif self.state == STATE_RESULT:
                     if event.key == pygame.K_r:
                         self._restart()
@@ -499,6 +542,10 @@ class Game:
         elif self.state == STATE_PACK_OPENING:
             if self.pack_opening:
                 self.pack_opening.draw(self.screen)
+
+        elif self.state == STATE_CARD_COLLECTION:
+            if self.pack_opening:
+                self.pack_opening.draw_card_collection(self.screen)
 
         elif self.state == STATE_RESULT:
             self.screen.fill(BLACK)
