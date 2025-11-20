@@ -1,6 +1,8 @@
 import pygame
 import random
 import sys
+import os
+import glob
 
 # 初期化
 pygame.init()
@@ -107,28 +109,67 @@ class Crosshair:
         pygame.draw.circle(screen, RED, (self.x, self.y), self.size, 2)
 
 
-class Card:
-    """カードクラス"""
+class HitEffect:
+    """GET!表示エフェクトクラス"""
     def __init__(self, x, y, scale=1.0):
         self.x = x
         self.y = y
         self.scale = scale
-        self.width = int(40 * scale)
-        self.height = int(60 * scale)
-        self.speed = 3 * scale
-        self.color = random.choice([RED, BLUE, GREEN, PURPLE, ORANGE])
+        self.lifetime = 60  # フレーム数
+        self.age = 0
+        self.font_size = int(48 * scale)
+        self.font = pygame.font.Font(None, self.font_size)
         self.active = True
 
     def update(self):
-        """カードを下に落とす"""
-        self.y += self.speed
+        """エフェクトを更新"""
+        self.age += 1
+        self.y -= 2 * self.scale  # 上に浮かぶ
+
+        if self.age >= self.lifetime:
+            self.active = False
 
     def draw(self, screen):
-        """カードを描画"""
-        pygame.draw.rect(screen, self.color,
-                        (self.x, self.y, self.width, self.height))
-        pygame.draw.rect(screen, WHITE,
-                        (self.x, self.y, self.width, self.height), max(1, int(2 * self.scale)))
+        """エフェクトを描画"""
+        if not self.active:
+            return
+
+        # フェードアウト効果
+        alpha = max(0, 255 - int(255 * self.age / self.lifetime))
+
+        # テキストを描画
+        text_surface = self.font.render("GET!", True, YELLOW)
+        text_surface.set_alpha(alpha)
+
+        # 中央に配置
+        text_rect = text_surface.get_rect(center=(self.x, self.y))
+        screen.blit(text_surface, text_rect)
+
+
+def load_card_images():
+    """images/フォルダから全カード画像を読み込む"""
+    images_dir = "images"
+    card_images = []
+
+    if os.path.exists(images_dir):
+        # rare_card_*.png/jpg/webp のパターンで画像を検索
+        patterns = ['rare_card_*.png', 'rare_card_*.jpg', 'rare_card_*.webp']
+        for pattern in patterns:
+            files = glob.glob(os.path.join(images_dir, pattern))
+            card_images.extend(files)
+
+        # ファイル名でソート
+        card_images.sort()
+
+    print(f"{len(card_images)} 枚のカード画像を見つけました")
+    return card_images
+
+
+def load_pack_images():
+    """pack_images/フォルダからパック画像を読み込む"""
+    # ダミーデータを使用（空のリストを返す）
+    print("パック画像: ダミーデータを使用")
+    return []
 
 
 def create_dummy_pack_image(width, height):
@@ -147,6 +188,31 @@ def create_dummy_pack_image(width, height):
     pack_text = text_font.render("PACK", True, WHITE)
     pack_rect = pack_text.get_rect(center=(width // 2, height - 30))
     surface.blit(pack_text, pack_rect)
+    return surface
+
+
+def load_and_scale_card_image(image_path, width, height):
+    """カード画像を読み込んでリサイズする"""
+    try:
+        image = pygame.image.load(image_path)
+        # カードのサイズに合わせてスケーリング
+        image = pygame.transform.scale(image, (width, height))
+        return image
+    except Exception as e:
+        print(f"画像読み込みエラー ({image_path}): {e}")
+        # エラー時はダミー画像を返す
+        return create_dummy_card_image_fallback(width, height)
+
+
+def create_dummy_card_image_fallback(width, height):
+    """フォールバック用のダミーカード画像"""
+    surface = pygame.Surface((width, height))
+    surface.fill((100, 100, 100))
+    pygame.draw.rect(surface, WHITE, (0, 0, width, height), 2)
+    font = pygame.font.Font(None, 24)
+    text = font.render("?", True, WHITE)
+    text_rect = text.get_rect(center=(width // 2, height // 2))
+    surface.blit(text, text_rect)
     return surface
 
 
@@ -191,15 +257,38 @@ def create_dummy_card_image(width, height, color, name):
 
 class CardPack:
     """カードパッククラス"""
-    def __init__(self, x, y, scale=1.0):
+    def __init__(self, x, y, scale=1.0, pack_image_path=None):
         self.x = x
         self.y = y
         self.initial_x = x  # 初期位置を記憶
         self.scale = scale
-        self.width = int(60 * scale)
-        self.height = int(80 * scale)
         self.destroyed = False
         self.color = BLUE
+        self.pack_image_path = pack_image_path
+        self.pack_image = None
+
+        # デフォルトサイズ
+        self.width = int(60 * scale)
+        self.height = int(80 * scale)
+
+        # パック画像を読み込み（元の縦横比を維持）
+        if pack_image_path:
+            try:
+                img = pygame.image.load(pack_image_path)
+                original_width = img.get_width()
+                original_height = img.get_height()
+
+                # 基準の高さに合わせてスケーリング（縦横比を維持）
+                target_height = int(80 * scale)
+                aspect_ratio = original_width / original_height
+                target_width = int(target_height * aspect_ratio)
+
+                self.width = target_width
+                self.height = target_height
+                self.pack_image = pygame.transform.scale(img, (self.width, self.height))
+            except Exception as e:
+                print(f"パック画像読み込みエラー: {e}")
+                self.pack_image = None
 
         # ランダムな左右移動（スケールに応じて調整）
         self.speed = random.uniform(1, 3) * scale  # ランダムな速度
@@ -218,42 +307,42 @@ class CardPack:
     def draw(self, screen):
         """カードパックを描画"""
         if not self.destroyed:
-            pygame.draw.rect(screen, self.color,
-                           (self.x, self.y, self.width, self.height))
-            pygame.draw.rect(screen, WHITE,
-                           (self.x, self.y, self.width, self.height), int(3 * self.scale))
-            # パックの中央に★マーク（スケールに応じて調整）
-            font_size = int(40 * self.scale)
-            font = pygame.font.Font(None, font_size)
-            star = font.render("★", True, YELLOW)
-            star_rect = star.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
-            screen.blit(star, star_rect)
+            if self.pack_image:
+                # パック画像を描画
+                screen.blit(self.pack_image, (self.x, self.y))
+            else:
+                # フォールバック: ダミー描画
+                pygame.draw.rect(screen, self.color,
+                               (self.x, self.y, self.width, self.height))
+                pygame.draw.rect(screen, WHITE,
+                               (self.x, self.y, self.width, self.height), int(3 * self.scale))
+                # パックの中央に★マーク（スケールに応じて調整）
+                font_size = int(40 * self.scale)
+                font = pygame.font.Font(None, font_size)
+                star = font.render("★", True, YELLOW)
+                star_rect = star.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
+                screen.blit(star, star_rect)
 
     def get_rect(self):
         """衝突判定用の矩形を返す"""
         return pygame.Rect(self.x, self.y, self.width, self.height)
 
     def destroy(self):
-        """カードパックを破壊してカードを生成"""
+        """カードパックを破壊"""
         self.destroyed = True
-        cards = []
-        for i in range(CARDS_PER_PACK):
-            # パックの位置からランダムな方向にカードを散らす
-            offset_x = random.randint(int(-30 * self.scale), int(30 * self.scale))
-            card = Card(self.x + self.width // 2 + offset_x, self.y, self.scale)
-            cards.append(card)
-        return cards
 
 
 class PackOpening:
     """パック開封シーンクラス"""
-    def __init__(self, destroyed_packs_count, screen_width, screen_height):
+    def __init__(self, destroyed_packs_count, screen_width, screen_height, card_image_files, pack_image_files=None):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.destroyed_packs_count = destroyed_packs_count
         self.current_pack_index = 0
         self.opening_progress = 0  # 0-100の開封進行度
         self.is_opened = False
+        self.card_image_files = card_image_files  # 利用可能な画像ファイルのリスト
+        self.pack_image_files = pack_image_files or []  # パック画像ファイルのリスト
 
         # スケール計算
         scale = min(screen_width / DEFAULT_SCREEN_WIDTH, screen_height / DEFAULT_SCREEN_HEIGHT)
@@ -262,33 +351,86 @@ class PackOpening:
         self.pack_x = screen_width // 2 - self.pack_width // 2
         self.pack_y = screen_height // 2 - self.pack_height // 2
 
-        # パック画像
-        self.pack_image = create_dummy_pack_image(self.pack_width, self.pack_height)
+        # パック画像（ランダムに選択）
+        self.pack_image = self._load_random_pack_image()
 
-        # ダミーカードデータ
-        self.card_width = int(80 * scale)
-        self.card_height = int(120 * scale)
-        self.current_cards = self._generate_dummy_cards()
+        # カードデータ（画面サイズに応じて動的にサイズ調整）
+        # 画面の高さの約30%をカードの高さとする
+        self.card_height = int(self.screen_height * 0.35)
+        # アスペクト比を2:3に保つ
+        self.card_width = int(self.card_height * 2 / 3)
+
+        # カード裏面画像を読み込む
+        self.card_back_image = self._load_card_back_image()
+
+        self.current_cards = self._generate_cards()
         self.all_cards = []  # 獲得した全カードを保存
 
         # フォント
         self.font = pygame.font.Font(None, int(36 * scale))
         self.small_font = pygame.font.Font(None, int(24 * scale))
 
-    def _generate_dummy_cards(self):
-        """ランダムにカードを生成（同じパック内で重複なし）"""
-        # 20種類のカードからランダムに5枚を選択（重複なし）
-        selected_cards = random.sample(CARD_MASTER_DATA, CARDS_PER_PACK)
+    def _load_card_back_image(self):
+        """カード裏面画像を読み込む"""
+        try:
+            back_image_path = os.path.join("images", "card_ura.jpg")
+            if os.path.exists(back_image_path):
+                img = pygame.image.load(back_image_path)
+                return pygame.transform.scale(img, (self.card_width, self.card_height))
+        except Exception as e:
+            print(f"カード裏面画像読み込みエラー: {e}")
 
+        # フォールバック: 青い裏面を生成
+        surface = pygame.Surface((self.card_width, self.card_height))
+        surface.fill(BLUE)
+        pygame.draw.rect(surface, WHITE, (0, 0, self.card_width, self.card_height), 3)
+        return surface
+
+    def _load_random_pack_image(self):
+        """ランダムにパック画像を読み込む"""
+        if self.pack_image_files:
+            try:
+                pack_path = random.choice(self.pack_image_files)
+                img = pygame.image.load(pack_path)
+                return pygame.transform.scale(img, (self.pack_width, self.pack_height))
+            except Exception as e:
+                print(f"パック画像読み込みエラー: {e}")
+        # フォールバック
+        return create_dummy_pack_image(self.pack_width, self.pack_height)
+
+    def _generate_cards(self):
+        """ランダムにカードを生成（実際の画像を使用）"""
         cards = []
-        for card_data in selected_cards:
-            cards.append({
-                'id': card_data['id'],
-                'name': card_data['name'],
-                'color': card_data['color'],
-                'rarity': card_data['rarity'],
-                'image': create_dummy_card_image(self.card_width, self.card_height, card_data['color'], card_data['name'])
-            })
+
+        # 画像ファイルが利用可能な場合はランダムに選択
+        if self.card_image_files and len(self.card_image_files) >= CARDS_PER_PACK:
+            # 重複なしで5枚選択
+            selected_images = random.sample(self.card_image_files, CARDS_PER_PACK)
+
+            for i, image_path in enumerate(selected_images):
+                # 画像を読み込んでスケーリング
+                card_image = load_and_scale_card_image(image_path, self.card_width, self.card_height)
+
+                cards.append({
+                    'id': i + 1,
+                    'name': os.path.basename(image_path),  # ファイル名を使用
+                    'image': card_image,
+                    'image_path': image_path,
+                    'flipped': False  # 裏面から開始
+                })
+        else:
+            # 画像が足りない場合はダミーを使用
+            selected_cards = random.sample(CARD_MASTER_DATA, min(CARDS_PER_PACK, len(CARD_MASTER_DATA)))
+            for card_data in selected_cards:
+                cards.append({
+                    'id': card_data['id'],
+                    'name': card_data['name'],
+                    'color': card_data['color'],
+                    'rarity': card_data['rarity'],
+                    'image': create_dummy_card_image(self.card_width, self.card_height, card_data['color'], card_data['name']),
+                    'flipped': False  # 裏面から開始
+                })
+
         return cards
 
     def handle_input(self, keys):
@@ -370,10 +512,25 @@ class PackOpening:
         start_x = self.screen_width // 2 - total_width // 2
         start_y = self.screen_height // 2 - self.card_height // 2
 
+        # カード位置を保存（クリック判定用）
+        self.card_positions = []
+
         for i, card in enumerate(self.current_cards):
             x = start_x + i * (self.card_width + spacing)
-            # カード画像を描画
-            screen.blit(card['image'], (x, start_y))
+            self.card_positions.append((x, start_y, self.card_width, self.card_height))
+
+            # 裏面か表面かを判定して描画
+            if card.get('flipped', False):
+                # 表面を表示
+                screen.blit(card['image'], (x, start_y))
+            else:
+                # 裏面を表示
+                screen.blit(self.card_back_image, (x, start_y))
+
+        # クリック案内
+        click_text = self.small_font.render("Click cards to flip!", True, YELLOW)
+        click_rect = click_text.get_rect(center=(self.screen_width // 2, int(80 * scale)))
+        screen.blit(click_text, click_rect)
 
         # 次のパックまたは結果へ進む案内
         if self.current_pack_index < self.destroyed_packs_count - 1:
@@ -383,13 +540,31 @@ class PackOpening:
         next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
         screen.blit(next_text, next_rect)
 
+    def handle_mouse_click(self, mouse_pos):
+        """マウスクリック処理"""
+        if not self.is_opened:
+            return
+
+        # カード位置が設定されていない場合は何もしない
+        if not hasattr(self, 'card_positions'):
+            return
+
+        # クリックされたカードを探す
+        for i, (x, y, w, h) in enumerate(self.card_positions):
+            if x <= mouse_pos[0] <= x + w and y <= mouse_pos[1] <= y + h:
+                # カードをめくる
+                self.current_cards[i]['flipped'] = True
+                break
+
     def next_pack(self):
         """次のパックへ"""
         if self.current_pack_index < self.destroyed_packs_count - 1:
             self.current_pack_index += 1
             self.opening_progress = 0
             self.is_opened = False
-            self.current_cards = self._generate_dummy_cards()
+            self.current_cards = self._generate_cards()
+            # 次のパック用に新しい画像を読み込む
+            self.pack_image = self._load_random_pack_image()
             return True
         return False
 
@@ -417,40 +592,59 @@ class PackOpening:
             return
 
         # 利用可能な画面領域を計算
-        header_height = int(110 * scale)
-        footer_height = int(60 * scale)
+        header_height = int(90 * scale)
+        footer_height = int(50 * scale)
         available_height = self.screen_height - header_height - footer_height
-        available_width = self.screen_width - int(40 * scale)
+        available_width = self.screen_width - int(30 * scale)
 
         # カード枚数から最適なサイズを計算
         card_count = len(self.all_cards)
-        base_card_width = self.card_width
-        base_card_height = self.card_height
-        spacing = int(15 * scale)
+        card_aspect_ratio = 2 / 3  # 幅 / 高さ
 
-        # 1行のカード枚数を仮決定
-        cards_per_row = max(1, available_width // (base_card_width + spacing))
-        total_rows = (card_count + cards_per_row - 1) // cards_per_row
+        # 最適なレイアウトを探索（カードサイズを最大化）
+        best_card_height = 0
+        best_cards_per_row = 1
+        best_spacing = 10
 
-        # 高さがオーバーする場合、カードサイズを縮小
-        total_height_needed = total_rows * (base_card_height + spacing)
-        if total_height_needed > available_height:
-            # 縮小率を計算
-            shrink_ratio = available_height / total_height_needed
-            display_card_width = int(base_card_width * shrink_ratio)
-            display_card_height = int(base_card_height * shrink_ratio)
-            spacing = max(5, int(spacing * shrink_ratio))
+        for test_cards_per_row in range(1, card_count + 1):
+            rows = (card_count + test_cards_per_row - 1) // test_cards_per_row
 
-            # 再計算
-            cards_per_row = max(1, available_width // (display_card_width + spacing))
-        else:
-            display_card_width = base_card_width
-            display_card_height = base_card_height
+            # このレイアウトでの最大カードサイズを計算
+            spacing = int(10 * scale)
+
+            # 幅から計算
+            max_width_per_card = (available_width - spacing * (test_cards_per_row - 1)) / test_cards_per_row
+            height_from_width = max_width_per_card / card_aspect_ratio
+
+            # 高さから計算
+            max_height_per_card = (available_height - spacing * (rows - 1)) / rows
+
+            # 小さい方を採用
+            card_height = min(height_from_width, max_height_per_card)
+
+            if card_height > best_card_height:
+                best_card_height = card_height
+                best_cards_per_row = test_cards_per_row
+                best_spacing = spacing
+
+        # 最適なサイズを適用
+        display_card_height = int(best_card_height)
+        display_card_width = int(display_card_height * card_aspect_ratio)
+        spacing = best_spacing
+        cards_per_row = best_cards_per_row
+
+        # 最小サイズの制限
+        min_card_height = int(60 * scale)
+        if display_card_height < min_card_height:
+            display_card_height = min_card_height
+            display_card_width = int(display_card_height * card_aspect_ratio)
 
         # グリッド描画の開始位置を計算
+        total_rows = (card_count + cards_per_row - 1) // cards_per_row
         actual_row_width = cards_per_row * display_card_width + (cards_per_row - 1) * spacing
+        actual_col_height = total_rows * display_card_height + (total_rows - 1) * spacing
         start_x = (self.screen_width - actual_row_width) // 2
-        start_y = header_height
+        start_y = header_height + (available_height - actual_col_height) // 2
 
         for i, card in enumerate(self.all_cards):
             row = i // cards_per_row
@@ -459,15 +653,12 @@ class PackOpening:
             y = start_y + row * (display_card_height + spacing)
 
             # カード画像をスケーリングして描画
-            if display_card_width != card['image'].get_width():
-                scaled_image = pygame.transform.scale(card['image'], (display_card_width, display_card_height))
-                screen.blit(scaled_image, (x, y))
-            else:
-                screen.blit(card['image'], (x, y))
+            scaled_image = pygame.transform.scale(card['image'], (display_card_width, display_card_height))
+            screen.blit(scaled_image, (x, y))
 
         # 次へ進む案内
         next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
-        next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(30 * scale)))
+        next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(25 * scale)))
         screen.blit(next_text, next_rect)
 
 
@@ -482,10 +673,16 @@ class Game:
         self.running = True
         self.state = STATE_SHOOTING
 
+        # カード画像ファイルを読み込む
+        self.card_image_files = load_card_images()
+
+        # パック画像ファイルを読み込む
+        self.pack_image_files = load_pack_images()
+
         # ゲーム要素の初期化
         self.crosshair = Crosshair(self.screen_width, self.screen_height)
         self.card_packs = []
-        self.cards = []
+        self.hit_effects = []  # GET!エフェクト
         self.ammo = INITIAL_AMMO
         self.start_time = pygame.time.get_ticks()  # ゲーム開始時刻
         self.is_cleared = False  # クリアしたかどうか
@@ -514,6 +711,16 @@ class Game:
         # 左側と右側の中心X座標
         centers_x = [self.screen_width // 4, self.screen_width * 3 // 4]
 
+        # パック画像をランダムに選択するためのリストを作成
+        selected_pack_images = []
+        if self.pack_image_files:
+            # 10個のパック用に画像をランダムに選択（重複許可）
+            for _ in range(CARD_PACKS_COUNT):
+                selected_pack_images.append(random.choice(self.pack_image_files))
+        else:
+            selected_pack_images = [None] * CARD_PACKS_COUNT
+
+        pack_index = 0
         # 各中心点に対してトランプの5のパターンで配置
         for center_x in centers_x:
             positions = [
@@ -525,7 +732,9 @@ class Game:
             ]
 
             for x, y in positions:
-                self.card_packs.append(CardPack(x, y, scale))
+                pack_image = selected_pack_images[pack_index] if pack_index < len(selected_pack_images) else None
+                self.card_packs.append(CardPack(x, y, scale, pack_image))
+                pack_index += 1
 
     def handle_events(self):
         """イベント処理"""
@@ -556,11 +765,15 @@ class Game:
                     self.pack_opening.pack_height = int(280 * scale)
                     self.pack_opening.pack_x = self.screen_width // 2 - self.pack_opening.pack_width // 2
                     self.pack_opening.pack_y = self.screen_height // 2 - self.pack_opening.pack_height // 2
-                    self.pack_opening.pack_image = create_dummy_pack_image(self.pack_opening.pack_width, self.pack_opening.pack_height)
+                    self.pack_opening.pack_image = self.pack_opening._load_random_pack_image()
                     self.pack_opening.card_width = int(80 * scale)
                     self.pack_opening.card_height = int(120 * scale)
                     self.pack_opening.font = pygame.font.Font(None, int(36 * scale))
                     self.pack_opening.small_font = pygame.font.Font(None, int(24 * scale))
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # 左クリック
+                    if self.state == STATE_PACK_OPENING and self.pack_opening:
+                        self.pack_opening.handle_mouse_click(event.pos)
             elif event.type == pygame.KEYDOWN:
                 if self.state == STATE_SHOOTING:
                     if event.key == pygame.K_SPACE:
@@ -590,14 +803,19 @@ class Game:
 
                 if crosshair_rect.colliderect(pack.get_rect()):
                     # ヒット！
-                    new_cards = pack.destroy()
-                    self.cards.extend(new_cards)
+                    pack.destroy()
+
+                    # GET!エフェクトを生成
+                    scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+                    effect_x = pack.x + pack.width // 2
+                    effect_y = pack.y + pack.height // 2
+                    self.hit_effects.append(HitEffect(effect_x, effect_y, scale))
                     break
 
     def _restart(self):
         """ゲームを再開"""
         self.card_packs.clear()
-        self.cards.clear()
+        self.hit_effects.clear()
         self.ammo = INITIAL_AMMO
         self.is_cleared = False
         self.clear_time = 0
@@ -617,12 +835,11 @@ class Game:
             for pack in self.card_packs:
                 pack.update()
 
-            # カードの更新
-            for card in self.cards[:]:
-                card.update()
-                # 画面外に出たカードを削除
-                if card.y > self.screen_height:
-                    self.cards.remove(card)
+            # エフェクトの更新
+            for effect in self.hit_effects[:]:
+                effect.update()
+                if not effect.active:
+                    self.hit_effects.remove(effect)
 
             # ゲームオーバー判定
             self._check_game_over()
@@ -661,7 +878,7 @@ class Game:
         if shooting_ended:
             destroyed_count = sum(1 for pack in self.card_packs if pack.destroyed)
             if destroyed_count > 0:
-                self.pack_opening = PackOpening(destroyed_count, self.screen_width, self.screen_height)
+                self.pack_opening = PackOpening(destroyed_count, self.screen_width, self.screen_height, self.card_image_files, self.pack_image_files)
                 self.state = STATE_PACK_OPENING
             else:
                 # パックを1つも破壊していない場合は結果画面へ
@@ -676,9 +893,9 @@ class Game:
             for pack in self.card_packs:
                 pack.draw(self.screen)
 
-            # カードを描画
-            for card in self.cards:
-                card.draw(self.screen)
+            # GET!エフェクトを描画
+            for effect in self.hit_effects:
+                effect.draw(self.screen)
 
             # 照準を描画
             self.crosshair.draw(self.screen)
@@ -716,10 +933,6 @@ class Game:
         time_color = RED if remaining_time <= 10 else WHITE
         time_text = self.font.render(f"Time: {remaining_time:.1f}s", True, time_color)
         self.screen.blit(time_text, (10, 90))
-
-        # 獲得カード数
-        cards_text = self.font.render(f"Cards: {len(self.cards)}", True, WHITE)
-        self.screen.blit(cards_text, (self.screen_width - 150, 10))
 
     def _draw_game_over(self):
         """ゲームオーバー画面を描画"""
