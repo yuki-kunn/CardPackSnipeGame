@@ -540,7 +540,7 @@ class PackOpening:
             if self.current_pack_index < self.destroyed_packs_count - 1:
                 next_text = self.small_font.render("Press SPACE for Next Pack", True, GREEN)
             else:
-                next_text = self.small_font.render("Press SPACE to Continue", True, GREEN)
+                next_text = self.small_font.render("Press SPACE to Restart", True, GREEN)
             next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
             screen.blit(next_text, next_rect)
 
@@ -665,7 +665,7 @@ class PackOpening:
             screen.blit(scaled_image, (x, y))
 
         # 次へ進む案内
-        next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
+        next_text = self.small_font.render("Press SPACE to Restart", True, WHITE)
         next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(25 * scale)))
         screen.blit(next_text, next_rect)
 
@@ -795,10 +795,7 @@ class Game:
                                 self.state = STATE_CARD_COLLECTION
                 elif self.state == STATE_CARD_COLLECTION:
                     if event.key == pygame.K_SPACE:
-                        self.state = STATE_RESULT
-                elif self.state == STATE_RESULT:
-                    if event.key == pygame.K_r:
-                        self._restart()
+                        self._restart()  # カード一覧から直接リスタート
 
     def _fire(self):
         """照準位置でヒット判定"""
