@@ -527,18 +527,22 @@ class PackOpening:
                 # 裏面を表示
                 screen.blit(self.card_back_image, (x, start_y))
 
-        # クリック案内
-        click_text = self.small_font.render("Click cards to flip!", True, YELLOW)
-        click_rect = click_text.get_rect(center=(self.screen_width // 2, int(80 * scale)))
-        screen.blit(click_text, click_rect)
+        # すべてのカードがめくられたかチェック
+        all_flipped = self.all_cards_flipped()
 
-        # 次のパックまたは結果へ進む案内
-        if self.current_pack_index < self.destroyed_packs_count - 1:
-            next_text = self.small_font.render("Press SPACE for Next Pack", True, WHITE)
+        if not all_flipped:
+            # まだめくっていないカードがある場合
+            click_text = self.small_font.render("Click cards to flip!", True, YELLOW)
+            click_rect = click_text.get_rect(center=(self.screen_width // 2, int(80 * scale)))
+            screen.blit(click_text, click_rect)
         else:
-            next_text = self.small_font.render("Press SPACE to Continue", True, WHITE)
-        next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
-        screen.blit(next_text, next_rect)
+            # すべてめくった場合
+            if self.current_pack_index < self.destroyed_packs_count - 1:
+                next_text = self.small_font.render("Press SPACE for Next Pack", True, GREEN)
+            else:
+                next_text = self.small_font.render("Press SPACE to Continue", True, GREEN)
+            next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
+            screen.blit(next_text, next_rect)
 
     def handle_mouse_click(self, mouse_pos):
         """マウスクリック処理"""
@@ -555,6 +559,10 @@ class PackOpening:
                 # カードをめくる
                 self.current_cards[i]['flipped'] = True
                 break
+
+    def all_cards_flipped(self):
+        """すべてのカードがめくられたかチェック"""
+        return all(card.get('flipped', False) for card in self.current_cards)
 
     def next_pack(self):
         """次のパックへ"""
@@ -780,9 +788,11 @@ class Game:
                         self._fire()
                 elif self.state == STATE_PACK_OPENING:
                     if event.key == pygame.K_SPACE and self.pack_opening.is_opened:
-                        # 次のパックへ、または獲得カード一覧へ
-                        if not self.pack_opening.next_pack():
-                            self.state = STATE_CARD_COLLECTION
+                        # すべてのカードがめくられている場合のみ次へ進める
+                        if self.pack_opening.all_cards_flipped():
+                            # 次のパックへ、または獲得カード一覧へ
+                            if not self.pack_opening.next_pack():
+                                self.state = STATE_CARD_COLLECTION
                 elif self.state == STATE_CARD_COLLECTION:
                     if event.key == pygame.K_SPACE:
                         self.state = STATE_RESULT
