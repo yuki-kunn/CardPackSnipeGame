@@ -7,6 +7,55 @@ import glob
 # 初期化
 pygame.init()
 
+# 日本語フォントを取得する関数
+def get_japanese_font(size):
+    """日本語対応フォントを取得"""
+    # プロジェクト内のフォントを優先
+    project_font = os.path.join(os.path.dirname(__file__), "fonts", "NotoSansCJKjp-Regular.otf")
+    if os.path.exists(project_font):
+        try:
+            return pygame.font.Font(project_font, size)
+        except:
+            pass
+
+    # 試すフォントファイルのパス
+    font_paths = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
+        "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+    ]
+
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                return pygame.font.Font(font_path, size)
+            except:
+                continue
+
+    # フォールバック: システムフォントを試す
+    font_names = [
+        "notosanscjkjp",
+        "notosansjp",
+        "takaopgothic",
+        "ipaexgothic",
+        "ipagothic",
+        "meiryo",
+        "msgothic",
+        "yugothic"
+    ]
+
+    for font_name in font_names:
+        try:
+            font = pygame.font.SysFont(font_name, size)
+            if font.get_height() > 0:
+                return font
+        except:
+            continue
+
+    # フォールバック: デフォルトフォント
+    return pygame.font.Font(None, size)
+
 # 定数
 DEFAULT_SCREEN_WIDTH = 800
 DEFAULT_SCREEN_HEIGHT = 600
@@ -118,7 +167,7 @@ class HitEffect:
         self.lifetime = 60  # フレーム数
         self.age = 0
         self.font_size = int(48 * scale)
-        self.font = pygame.font.Font(None, self.font_size)
+        self.font = get_japanese_font(self.font_size)
         self.active = True
 
     def update(self):
@@ -138,7 +187,7 @@ class HitEffect:
         alpha = max(0, 255 - int(255 * self.age / self.lifetime))
 
         # テキストを描画
-        text_surface = self.font.render("GET!", True, YELLOW)
+        text_surface = self.font.render("ゲット！", True, YELLOW)
         text_surface.set_alpha(alpha)
 
         # 中央に配置
@@ -167,9 +216,21 @@ def load_card_images():
 
 def load_pack_images():
     """pack_images/フォルダからパック画像を読み込む"""
-    # ダミーデータを使用（空のリストを返す）
-    print("パック画像: ダミーデータを使用")
-    return []
+    images_dir = "pack_images"
+    pack_images = []
+
+    if os.path.exists(images_dir):
+        # *.png/jpg/webp のパターンで画像を検索
+        patterns = ['*.png', '*.jpg', '*.webp']
+        for pattern in patterns:
+            files = glob.glob(os.path.join(images_dir, pattern))
+            pack_images.extend(files)
+
+        # ファイル名でソート
+        pack_images.sort()
+
+    print(f"{len(pack_images)} 枚のパック画像を見つけました")
+    return pack_images
 
 
 def create_dummy_pack_image(width, height):
@@ -185,7 +246,7 @@ def create_dummy_pack_image(width, height):
     surface.blit(star, star_rect)
     # PACK テキスト
     text_font = pygame.font.Font(None, 36)
-    pack_text = text_font.render("PACK", True, WHITE)
+    pack_text = text_font.render("パック", True, WHITE)
     pack_rect = pack_text.get_rect(center=(width // 2, height - 30))
     surface.blit(pack_text, pack_rect)
     return surface
@@ -366,9 +427,9 @@ class PackOpening:
         self.current_cards = self._generate_cards()
         self.all_cards = []  # 獲得した全カードを保存
 
-        # フォント
-        self.font = pygame.font.Font(None, int(36 * scale))
-        self.small_font = pygame.font.Font(None, int(24 * scale))
+        # フォント（日本語対応）
+        self.font = get_japanese_font(int(36 * scale))
+        self.small_font = get_japanese_font(int(24 * scale))
 
     def _load_card_back_image(self):
         """カード裏面画像を読み込む"""
@@ -486,7 +547,7 @@ class PackOpening:
                 screen.blit(top_surface, (self.pack_x, top_y))
 
         # 操作案内
-        guide_text = self.small_font.render("Press Arrow Keys to Open!", True, WHITE)
+        guide_text = self.small_font.render("やじるしキーでひらこう！", True, WHITE)
         guide_rect = guide_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
         screen.blit(guide_text, guide_rect)
 
@@ -501,7 +562,7 @@ class PackOpening:
     def _draw_opened_cards(self, screen):
         """開封後のカード表示"""
         # タイトル
-        title_text = self.font.render("Pack Opened!", True, YELLOW)
+        title_text = self.font.render("パックがあいたよ！", True, YELLOW)
         scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
         title_rect = title_text.get_rect(center=(self.screen_width // 2, int(50 * scale)))
         screen.blit(title_text, title_rect)
@@ -532,15 +593,15 @@ class PackOpening:
 
         if not all_flipped:
             # まだめくっていないカードがある場合
-            click_text = self.small_font.render("Click cards to flip!", True, YELLOW)
+            click_text = self.small_font.render("カードをクリックしてめくろう！", True, YELLOW)
             click_rect = click_text.get_rect(center=(self.screen_width // 2, int(80 * scale)))
             screen.blit(click_text, click_rect)
         else:
             # すべてめくった場合
             if self.current_pack_index < self.destroyed_packs_count - 1:
-                next_text = self.small_font.render("Press SPACE for Next Pack", True, GREEN)
+                next_text = self.small_font.render("スペースキーでつぎのパック", True, GREEN)
             else:
-                next_text = self.small_font.render("Press SPACE to Restart", True, GREEN)
+                next_text = self.small_font.render("スペースキーでもういちど", True, GREEN)
             next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(50 * scale)))
             screen.blit(next_text, next_rect)
 
@@ -587,12 +648,12 @@ class PackOpening:
         scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
 
         # タイトル
-        title_text = self.font.render("All Cards Collected!", True, YELLOW)
+        title_text = self.font.render("ゲットしたカード！", True, YELLOW)
         title_rect = title_text.get_rect(center=(self.screen_width // 2, int(30 * scale)))
         screen.blit(title_text, title_rect)
 
         # カード総数表示
-        total_text = self.small_font.render(f"Total: {len(self.all_cards)} cards", True, WHITE)
+        total_text = self.small_font.render(f"ぜんぶで {len(self.all_cards)}まい", True, WHITE)
         total_rect = total_text.get_rect(center=(self.screen_width // 2, int(70 * scale)))
         screen.blit(total_text, total_rect)
 
@@ -665,7 +726,7 @@ class PackOpening:
             screen.blit(scaled_image, (x, y))
 
         # 次へ進む案内
-        next_text = self.small_font.render("Press SPACE to Restart", True, WHITE)
+        next_text = self.small_font.render("スペースキーでもういちど", True, WHITE)
         next_rect = next_text.get_rect(center=(self.screen_width // 2, self.screen_height - int(25 * scale)))
         screen.blit(next_text, next_rect)
 
@@ -676,7 +737,7 @@ class Game:
         self.screen_width = DEFAULT_SCREEN_WIDTH
         self.screen_height = DEFAULT_SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
-        pygame.display.set_caption("PokePoke - Card Pack Sniper")
+        pygame.display.set_caption("カードパックをうちおとせ！")
         self.clock = pygame.time.Clock()
         self.running = True
         self.state = STATE_SHOOTING
@@ -776,8 +837,8 @@ class Game:
                     self.pack_opening.pack_image = self.pack_opening._load_random_pack_image()
                     self.pack_opening.card_width = int(80 * scale)
                     self.pack_opening.card_height = int(120 * scale)
-                    self.pack_opening.font = pygame.font.Font(None, int(36 * scale))
-                    self.pack_opening.small_font = pygame.font.Font(None, int(24 * scale))
+                    self.pack_opening.font = get_japanese_font(int(36 * scale))
+                    self.pack_opening.small_font = get_japanese_font(int(24 * scale))
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # 左クリック
                     if self.state == STATE_PACK_OPENING and self.pack_opening:
@@ -926,23 +987,35 @@ class Game:
 
     def _draw_ui(self):
         """UI要素を描画"""
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+        jp_font = get_japanese_font(int(28 * scale))
+
         # 残弾数
-        ammo_text = self.font.render(f"Ammo: {self.ammo}", True, WHITE)
+        ammo_text = jp_font.render(f"のこりのたま: {self.ammo}", True, WHITE)
         self.screen.blit(ammo_text, (10, 10))
 
         # 破壊したパック数
         destroyed = sum(1 for pack in self.card_packs if pack.destroyed)
-        packs_text = self.font.render(f"Packs: {destroyed}/{CARD_PACKS_COUNT}", True, WHITE)
+        packs_text = jp_font.render(f"ゲットしたパック: {destroyed}/{CARD_PACKS_COUNT}", True, WHITE)
         self.screen.blit(packs_text, (10, 50))
 
         # 残り時間
         remaining_time = self._get_remaining_time()
         time_color = RED if remaining_time <= 10 else WHITE
-        time_text = self.font.render(f"Time: {remaining_time:.1f}s", True, time_color)
+        time_text = jp_font.render(f"のこりじかん: {remaining_time:.1f}びょう", True, time_color)
         self.screen.blit(time_text, (10, 90))
+
+        # 操作説明
+        help_text = jp_font.render("やじるしキー: うごく  スペース: うつ", True, YELLOW)
+        help_rect = help_text.get_rect(center=(self.screen_width // 2, self.screen_height - 30))
+        self.screen.blit(help_text, help_rect)
 
     def _draw_game_over(self):
         """ゲームオーバー画面を描画"""
+        scale = min(self.screen_width / DEFAULT_SCREEN_WIDTH, self.screen_height / DEFAULT_SCREEN_HEIGHT)
+        jp_font = get_japanese_font(int(28 * scale))
+        jp_big_font = get_japanese_font(int(48 * scale))
+
         # 半透明の黒背景
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(200)
@@ -951,16 +1024,16 @@ class Game:
 
         # タイトルテキスト（クリアか失敗か）
         if self.is_cleared:
-            title_text = self.big_font.render("CLEAR!", True, GREEN)
+            title_text = jp_big_font.render("クリア！やったね！", True, GREEN)
         else:
-            title_text = self.big_font.render("GAME OVER", True, RED)
+            title_text = jp_big_font.render("ざんねん！", True, RED)
         title_rect = title_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 - 50))
         self.screen.blit(title_text, title_rect)
 
         # 結果
         destroyed = sum(1 for pack in self.card_packs if pack.destroyed)
-        result_text = self.font.render(
-            f"Packs Destroyed: {destroyed}/{CARD_PACKS_COUNT}",
+        result_text = jp_font.render(
+            f"ゲットしたパック: {destroyed}こ / {CARD_PACKS_COUNT}こ",
             True, WHITE
         )
         result_rect = result_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 + 20))
@@ -968,8 +1041,8 @@ class Game:
 
         # クリアタイム表示（クリアした場合のみ）
         if self.is_cleared:
-            clear_time_text = self.font.render(
-                f"Clear Time: {self.clear_time:.2f}s",
+            clear_time_text = jp_font.render(
+                f"クリアタイム: {self.clear_time:.2f}びょう",
                 True, YELLOW
             )
             clear_time_rect = clear_time_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 + 60))
@@ -979,7 +1052,7 @@ class Game:
             restart_y = self.screen_height // 2 + 70
 
         # リスタート案内
-        restart_text = self.font.render("Press R to Restart", True, YELLOW)
+        restart_text = jp_font.render("Rキーでもういちどあそぶ", True, YELLOW)
         restart_rect = restart_text.get_rect(center=(self.screen_width // 2, restart_y))
         self.screen.blit(restart_text, restart_rect)
 
