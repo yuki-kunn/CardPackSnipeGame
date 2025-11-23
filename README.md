@@ -1,46 +1,105 @@
-# PokePoke - Card Pack Sniper Game
+# カードパックをうちおとせ！
 
-射的形式でカードパックを撃ち落とし、カードを獲得するゲームです。
+カードパックを狙い撃ちして、ゲットしたパックを開封するシューティングゲームです。
+小学生でも遊べるように、ひらがな表示に対応しています。
 
-## ゲーム仕様
+## 遊び方
 
-- **エンジン**: Pygame
-- **カードパック数**: 10個 (左右に5個ずつ)
-- **初期弾数**: 10発
-- **各パックのカード数**: 5枚
+1. **スタート画面**でスペースキーを押してゲーム開始
+2. **矢印キー**で照準を動かす
+3. **スペースキー**で弾を発射
+4. 動いているパックに当てるとゲット！
+5. ゲットしたパックを開封してカードをもらおう
 
-## 操作方法
+### ルール
+- 弾数: 10発
+- 制限時間: 45秒
+- パック数: 10個
 
-- **照準移動**: 矢印キー (上下左右)
-- **射撃**: スペースキー (照準がカードパックに重なっている時にヒット)
-- **再スタート**: Rキー (ゲームオーバー後)
+## 必要な環境
+
+- Python 3.x
+- Pygame
+
+```bash
+pip install pygame
+```
+
+## ファイル構成
+
+```
+CardPackSnipeGame/
+├── main.py          # ゲーム起動ファイル
+├── game.py          # メインゲームロジック
+├── constants.py     # 定数定義
+├── utils.py         # ユーティリティ関数
+├── crosshair.py     # 照準クラス
+├── hit_effect.py    # エフェクトクラス
+├── card_pack.py     # カードパッククラス
+├── pack_opening.py  # パック開封クラス
+├── fonts/           # フォントファイル
+│   └── NotoSansCJKjp-Regular.otf
+├── images/          # カード画像
+│   ├── rare_card_*.png/jpg/webp
+│   └── card_ura.jpg (カード裏面)
+└── pack_images/     # パック画像
+    └── *.png/jpg/webp
+```
 
 ## セットアップ
 
-### 1. python3-venvのインストール（初回のみ）
-```bash
-sudo apt install python3.12-venv
-```
+### 1. 仮想環境の作成（推奨）
 
-### 2. 仮想環境の作成と起動
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 3. 依存関係のインストールと実行
+### 2. フォントのダウンロード
+
+日本語表示に必要なフォントをダウンロードしてください：
+
 ```bash
-pip install -r requirements.txt
+mkdir -p fonts
+cd fonts
+wget https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf
+```
+
+または、以下のリンクから直接ダウンロード：
+- [NotoSansCJKjp-Regular.otf](https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf)
+
+### 3. 画像ファイルの配置
+
+#### カード画像（images/）
+- ファイル名: `rare_card_*.png`、`rare_card_*.jpg`、`rare_card_*.webp`
+- カード裏面: `card_ura.jpg`
+- 画像がない場合はダミー表示で動作します
+
+#### パック画像（pack_images/）
+- ファイル名: `*.png`、`*.jpg`、`*.webp`
+- 画像がない場合はダミー表示で動作します
+
+## 実行方法
+
+```bash
 python main.py
 ```
 
-### 終了後
-仮想環境から抜けるには:
-```bash
-deactivate
-```
+## 操作方法
+
+| キー | 動作 |
+|------|------|
+| 矢印キー | 照準を移動 |
+| スペース | 弾を発射 / 決定 |
+| クリック | カードをめくる |
 
 ## 終了条件
 
 - 弾切れ
-- または全カードパック破壊
+- 制限時間切れ
+- または全カードパック破壊（クリア）
+
+## ライセンス
+
+このゲームは個人利用を目的としています。
